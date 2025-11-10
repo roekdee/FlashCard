@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oxford 3000 Flashcards</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="word-meta-styles.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-container">
+            <div class="login-header">
+                <h1>🎓 Oxford 3000</h1>
+                <p>Flashcards</p>
+            </div>
+            <div class="login-form">
+                <h2>เข้าสู่ระบบ</h2>
+                <div class="input-group">
+                    <label for="username">👤 ชื่อผู้ใช้</label>
+                    <input type="text" id="username" placeholder="กรอกชื่อผู้ใช้">
+                </div>
+                <div class="input-group">
+                    <label for="password">🔒 รหัสผ่าน</label>
+                    <input type="password" id="password" placeholder="กรอกรหัสผ่าน">
+                </div>
+                <button id="loginBtn" class="btn btn-primary btn-large">🚀 เข้าสู่ระบบ</button>
+                <p class="login-hint">💡 ใช้ชื่อผู้ใช้และรหัสผ่านเดียวกันในครั้งถัดไป</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" id="mainApp" style="display: none;">
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>Oxford 3000 Flashcards</h1>
+                    <p class="subtitle">เรียนรู้คำศัพท์อย่างง่ายดาย</p>
+                </div>
+                <div class="header-actions">
+                    <button id="viewHiddenBtn" class="btn btn-view-hidden">
+                        🎯 คำที่จำได้แล้ว
+                    </button>
+                    <button id="logoutBtn" class="btn btn-logout">
+                        👋 ออกจากระบบ
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats Section -->
+        <section class="stats">
+            <div class="stat-item">
+                <span class="stat-label">📚 เหลือในกองสุ่ม</span>
+                <span class="stat-value" id="remainingCount">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">🎯 จำได้แล้ว</span>
+                <span class="stat-value" id="learnedCount">0</span>
+            </div>
+        </section>
+
+        <!-- Flashcard -->
+        <section class="flashcard-container" id="flashcardContainer">
+            <div class="flashcard" id="flashcard">
+                <div class="card-front">
+                    <h2 class="word" id="word">-</h2>
+                    <div class="word-meta">
+                        <span class="pos-tag" id="posTag">-</span>
+                        <span class="level-tag" id="levelTag">-</span>
+                    </div>
+                </div>
+                
+                <!-- Translation Toggle -->
+                <div class="translation-section">
+                    <label class="switch">
+                        <input type="checkbox" id="showTranslationToggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-label">💬 แสดงคำแปล</span>
+                </div>
+                
+                <!-- Translation Content (hidden by default) -->
+                <div class="translation-content" id="translationContent" style="display: none;">
+                    <div class="translation">
+                        <strong>คำแปล:</strong> 
+                        <p id="translationText">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div class="empty-state" id="emptyState" style="display: none;">
+                <p>🎉</p>
+                <p>เรียนครบทุกคำแล้ว!</p>
+                <p>กดปุ่มด้านล่างเพื่อเริ่มใหม่</p>
+            </div>
+        </section>
+
+        <!-- Action Buttons -->
+        <section class="actions">
+            <button id="startBtn" class="btn btn-primary btn-large">🚀 เริ่มสุ่มคำ</button>
+            <div class="action-group" id="cardActions" style="display: none;">
+                <button id="hideBtn" class="btn btn-danger">🙈 จำได้แล้ว</button>
+                <button id="nextBtn" class="btn btn-secondary">➡️ ถัดไป</button>
+            </div>
+        </section>
+
+        <footer>
+            <p>👤 <span id="currentUsername">-</span> | User ID: <code id="userIdDisplay">-</code></p>
+        </footer>
+    </div>
+
+    <!-- Learned Words Modal -->
+    <div id="hiddenModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>� คำที่จำได้แล้ว</h2>
+                <button class="modal-close" id="closeModalBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="hiddenWordsList">
+                <p class="loading">กำลังโหลด...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
