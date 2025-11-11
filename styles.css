@@ -283,6 +283,22 @@ header h1 {
     margin: 0;
     letter-spacing: -0.02em;
     animation: wordAppear 0.5s ease;
+    white-space: nowrap;
+    max-width: 100%;
+    transition: font-size 0.3s ease;
+}
+
+/* Auto-scale font size based on word length */
+.word[data-length="long"] {
+    font-size: 3.8rem;
+}
+
+.word[data-length="very-long"] {
+    font-size: 3rem;
+}
+
+.word[data-length="extra-long"] {
+    font-size: 2.2rem;
 }
 
 @keyframes wordAppear {
@@ -311,6 +327,9 @@ header h1 {
 .translation p {
     color: var(--text-color);
     font-weight: 500;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
 }
 
 /* ===================== TRANSLATION TOGGLE ===================== */
@@ -416,6 +435,9 @@ input:checked + .slider:before {
     color: white !important;
     font-size: 1.25rem;
     font-weight: 500;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
 }
 
 /* ===================== EMPTY STATE ===================== */

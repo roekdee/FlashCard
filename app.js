@@ -536,7 +536,19 @@ function showCard() {
     const currentWord = wordPool[currentWordIndex];
     
     // แสดงคำหลัก
-    document.getElementById('word').textContent = currentWord.word || '-';
+    const wordElement = document.getElementById('word');
+    wordElement.textContent = currentWord.word || '-';
+    
+    // Auto-scale font based on word length
+    const wordLength = (currentWord.word || '').length;
+    wordElement.removeAttribute('data-length');
+    if (wordLength > 15) {
+        wordElement.setAttribute('data-length', 'extra-long');
+    } else if (wordLength > 12) {
+        wordElement.setAttribute('data-length', 'very-long');
+    } else if (wordLength > 8) {
+        wordElement.setAttribute('data-length', 'long');
+    }
     
     // แสดง POS (Parts of Speech)
     const posTag = document.getElementById('posTag');
