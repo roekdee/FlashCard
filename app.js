@@ -308,6 +308,13 @@ async function saveWordState(wordId, learned = false, hiddenForever = false) {
 
 async function getHiddenWords() {
     try {
+        // เพิ่ม cache สำหรับ hidden words
+        const cacheKey = 'flash_hidden_cache_' + userId;
+        const cached = getCachedData(cacheKey);
+        if (cached) {
+            return cached;
+        }
+        
         const url = `${CONFIG.API_URL}?route=hidden&userId=${userId}`;
         
         const response = await fetch(url);
@@ -317,7 +324,12 @@ async function getHiddenWords() {
             throw new Error(data.error);
         }
         
-        return data.data || [];
+        const hiddenWords = data.data || [];
+        
+        // Cache hidden words
+        setCachedData(cacheKey, hiddenWords);
+        
+        return hiddenWords;
     } catch (error) {
         console.error('Error fetching hidden words:', error);
         alert('เกิดข้อผิดพลาดในการโหลดคำที่ซ่อน: ' + error.message);
@@ -337,9 +349,10 @@ async function unhideWord(wordId) {
             throw new Error(data.error);
         }
         
-        // ลบ cache
+        // ลบ cache ทั้งหมด
         localStorage.removeItem(CACHE_KEY + '_' + userId);
         localStorage.removeItem(CACHE_STATS_KEY + '_' + userId);
+        localStorage.removeItem('flash_hidden_cache_' + userId);
         
         return data;
     } catch (error) {
@@ -351,22 +364,27 @@ async function unhideWord(wordId) {
 
 // ===================== HANDLERS =====================
 async function handleStart() {
-    document.getElementById('startBtn').disabled = true;
-    document.getElementById('startBtn').textContent = 'กำลังโหลด...';
+    const startBtn = document.getElementById('startBtn');
+    startBtn.disabled = true;
+    startBtn.textContent = 'กำลังโหลด...';
     
-    await loadNewWords();
+    // โหลดแบบ parallel ทั้ง words และ stats
+    const [words] = await Promise.all([
+        loadNewWords(),
+        fetchTotalStats() // prefetch stats ตอนโหลดคำ
+    ]);
     
     if (wordPool.length === 0) {
         alert('ไม่มีคำในระบบ กรุณาเพิ่มข้อมูลในชีต words');
-        document.getElementById('startBtn').disabled = false;
-        document.getElementById('startBtn').textContent = 'เริ่มสุ่ม';
+        startBtn.disabled = false;
+        startBtn.textContent = 'เริ่มสุ่ม';
         return;
     }
     
     currentWordIndex = 0;
     showCard();
     
-    document.getElementById('startBtn').style.display = 'none';
+    startBtn.style.display = 'none';
     document.getElementById('cardActions').style.display = 'flex';
 }
 
@@ -431,7 +449,15 @@ async function openHiddenModal() {
     const listContainer = document.getElementById('hiddenWordsList');
     
     modal.style.display = 'flex';
-    listContainer.innerHTML = '<p class="loading">กำลังโหลด...</p>';
+    
+    // แสดง skeleton loading แทน
+    listContainer.innerHTML = `
+        <div class="loading-skeleton">
+            <div class="skeleton-item"></div>
+            <div class="skeleton-item"></div>
+            <div class="skeleton-item"></div>
+        </div>
+    `;
     
     const hiddenWords = await getHiddenWords();
     
