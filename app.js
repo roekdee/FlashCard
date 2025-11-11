@@ -19,6 +19,38 @@ let learnedCount = 0;
 let totalWordsInSheet = 0; // จำนวนคำทั้งหมดใน sheet
 let hiddenWordsCount = 0; // จำนวนคำที่ซ่อน
 
+// Cache
+const CACHE_KEY = 'flash_words_cache';
+const CACHE_STATS_KEY = 'flash_stats_cache';
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+function getCachedData(key) {
+    const cached = localStorage.getItem(key);
+    if (!cached) return null;
+    
+    try {
+        const data = JSON.parse(cached);
+        if (Date.now() - data.timestamp < CACHE_DURATION) {
+            return data.value;
+        }
+        localStorage.removeItem(key);
+    } catch (e) {
+        localStorage.removeItem(key);
+    }
+    return null;
+}
+
+function setCachedData(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify({
+            value: value,
+            timestamp: Date.now()
+        }));
+    } catch (e) {
+        console.error('Cache error:', e);
+    }
+}
+
 // ===================== INIT =====================
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
@@ -135,7 +167,10 @@ function handleLogin() {
 
 function handleLogout() {
     if (confirm('🚪 ต้องการออกจากระบบใช่หรือไม่?')) {
+        // ลบทุก cache
         localStorage.removeItem(CONFIG.AUTH_KEY);
+        localStorage.removeItem(CACHE_KEY + '_' + userId);
+        localStorage.removeItem(CACHE_STATS_KEY + '_' + userId);
         currentUser = null;
         window.location.reload();
     }
@@ -192,6 +227,12 @@ function initEventListeners() {
 // ===================== API CALLS =====================
 async function fetchTotalStats() {
     try {
+        // ลอง cache ก่อน
+        const cached = getCachedData(CACHE_STATS_KEY + '_' + userId);
+        if (cached) {
+            return cached;
+        }
+        
         const url = `${CONFIG.API_URL}?route=stats&userId=${userId}`;
         
         const response = await fetch(url);
@@ -200,6 +241,9 @@ async function fetchTotalStats() {
         if (data.error) {
             throw new Error(data.error);
         }
+        
+        // เก็บ cache
+        setCachedData(CACHE_STATS_KEY + '_' + userId, data);
         
         return data;
     } catch (error) {
@@ -210,6 +254,12 @@ async function fetchTotalStats() {
 
 async function fetchWords() {
     try {
+        // ลอง cache ก่อน
+        const cached = getCachedData(CACHE_KEY + '_' + userId);
+        if (cached) {
+            return cached;
+        }
+        
         const url = `${CONFIG.API_URL}?route=words&limit=200&excludeLearned=1&userId=${userId}`;
         
         const response = await fetch(url);
@@ -219,7 +269,12 @@ async function fetchWords() {
             throw new Error(data.error);
         }
         
-        return data.data || [];
+        const words = data.data || [];
+        
+        // เก็บ cache
+        setCachedData(CACHE_KEY + '_' + userId, words);
+        
+        return words;
     } catch (error) {
         console.error('Error fetching words:', error);
         alert('เกิดข้อผิดพลาดในการโหลดคำ: ' + error.message);
@@ -238,6 +293,10 @@ async function saveWordState(wordId, learned = false, hiddenForever = false) {
         if (data.error) {
             throw new Error(data.error);
         }
+        
+        // ลบ cache เพื่อบังคับ reload ครั้งถัดไป
+        localStorage.removeItem(CACHE_KEY + '_' + userId);
+        localStorage.removeItem(CACHE_STATS_KEY + '_' + userId);
         
         return data;
     } catch (error) {
@@ -277,6 +336,10 @@ async function unhideWord(wordId) {
         if (data.error) {
             throw new Error(data.error);
         }
+        
+        // ลบ cache
+        localStorage.removeItem(CACHE_KEY + '_' + userId);
+        localStorage.removeItem(CACHE_STATS_KEY + '_' + userId);
         
         return data;
     } catch (error) {
@@ -515,7 +578,11 @@ function updateStats() {
     // แสดงจำนวนคำทั้งหมดที่เหลือในระบบ (ไม่นับคำที่ซ่อนหรือจำได้แล้ว)
     const remainingInSystem = totalWordsInSheet - hiddenWordsCount - learnedCount;
     document.getElementById('remainingCount').textContent = Math.max(0, remainingInSystem);
-    document.getElementById('learnedCount').textContent = learnedCount;
+    
+    const hiddenWordsCountElement = document.getElementById('hiddenWordsCount');
+    if (hiddenWordsCountElement) {
+        hiddenWordsCountElement.textContent = hiddenWordsCount;
+    }
 }
 
 function updateUI() {
