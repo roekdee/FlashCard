@@ -19,18 +19,33 @@ let learnedCount = 0;
 let totalWordsInSheet = 0; // จำนวนคำทั้งหมดใน sheet
 let hiddenWordsCount = 0; // จำนวนคำที่ซ่อน
 
-// Cache
+// Cache - เพิ่มเวลา cache และใช้ in-memory cache
 const CACHE_KEY = 'flash_words_cache';
 const CACHE_STATS_KEY = 'flash_stats_cache';
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes (เพิ่มจาก 5)
+
+// In-memory cache สำหรับความเร็ว
+const memoryCache = new Map();
 
 function getCachedData(key) {
+    // ลองหา in-memory cache ก่อน (เร็วกว่า localStorage)
+    if (memoryCache.has(key)) {
+        const cached = memoryCache.get(key);
+        if (Date.now() - cached.timestamp < CACHE_DURATION) {
+            return cached.value;
+        }
+        memoryCache.delete(key);
+    }
+    
+    // ถ้าไม่มีใน memory ลอง localStorage
     const cached = localStorage.getItem(key);
     if (!cached) return null;
     
     try {
         const data = JSON.parse(cached);
         if (Date.now() - data.timestamp < CACHE_DURATION) {
+            // เก็บเข้า memory cache ด้วย
+            memoryCache.set(key, data);
             return data.value;
         }
         localStorage.removeItem(key);
@@ -41,13 +56,37 @@ function getCachedData(key) {
 }
 
 function setCachedData(key, value) {
+    const data = {
+        value: value,
+        timestamp: Date.now()
+    };
+    
+    // เก็บทั้ง memory และ localStorage
+    memoryCache.set(key, data);
+    
     try {
-        localStorage.setItem(key, JSON.stringify({
-            value: value,
-            timestamp: Date.now()
-        }));
+        localStorage.setItem(key, JSON.stringify(data));
     } catch (e) {
         console.error('Cache error:', e);
+        // ถ้า localStorage เต็ม ให้ลบ cache เก่า
+        try {
+            const keys = Object.keys(localStorage);
+            keys.forEach(k => {
+                if (k.startsWith('flash_')) {
+                    const item = localStorage.getItem(k);
+                    if (item) {
+                        const parsed = JSON.parse(item);
+                        if (Date.now() - parsed.timestamp > CACHE_DURATION) {
+                            localStorage.removeItem(k);
+                        }
+                    }
+                }
+            });
+            // ลองอีกครั้ง
+            localStorage.setItem(key, JSON.stringify(data));
+        } catch (e2) {
+            console.error('Failed to save cache:', e2);
+        }
     }
 }
 
@@ -101,7 +140,6 @@ function showMainApp() {
     
     initUserId();
     initEventListeners();
-    updateUI();
     
     // แสดงชื่อผู้ใช้
     document.getElementById('currentUsername').textContent = currentUser.username;
@@ -214,7 +252,7 @@ function initEventListeners() {
     if (closeModalBtn) closeModalBtn.addEventListener('click', closeHiddenModal);
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
     
-    // ปิด modal เมื่อคลิกนอก modal-content
+    // ปิด modal เษื่อคลิกนอก modal-content
     if (hiddenModal) {
         hiddenModal.addEventListener('click', (e) => {
             if (e.target.id === 'hiddenModal') {
@@ -222,9 +260,25 @@ function initEventListeners() {
             }
         });
     }
+    
+    // Event delegation สำหรับ unhide buttons
+    const hiddenWordsList = document.getElementById('hiddenWordsList');
+    if (hiddenWordsList) {
+        hiddenWordsList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('btn-unhide')) {
+                const wordId = e.target.getAttribute('data-word-id');
+                if (wordId) {
+                    handleUnhide(wordId);
+                }
+            }
+        });
+    }
 }
 
 // ===================== API CALLS =====================
+// Request deduplication - ป้องกัน API calls ซ้ำ
+const pendingRequests = new Map();
+
 async function fetchTotalStats() {
     try {
         // ลอง cache ก่อน
@@ -233,19 +287,30 @@ async function fetchTotalStats() {
             return cached;
         }
         
-        const url = `${CONFIG.API_URL}?route=stats&userId=${userId}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(data.error);
+        // ตรวจสอบว่ากำลังโหลดอยู่หรือไม่
+        const requestKey = 'stats_' + userId;
+        if (pendingRequests.has(requestKey)) {
+            return pendingRequests.get(requestKey);
         }
         
-        // เก็บ cache
-        setCachedData(CACHE_STATS_KEY + '_' + userId, data);
+        const url = `${CONFIG.API_URL}?route=stats&userId=${userId}`;
         
-        return data;
+        const requestPromise = fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                // เก็บ cache
+                setCachedData(CACHE_STATS_KEY + '_' + userId, data);
+                return data;
+            })
+            .finally(() => {
+                pendingRequests.delete(requestKey);
+            });
+        
+        pendingRequests.set(requestKey, requestPromise);
+        return requestPromise;
     } catch (error) {
         console.error('Error fetching stats:', error);
         return { total: 0, hidden: 0, learned: 0 };
@@ -260,27 +325,46 @@ async function fetchWords() {
             return cached;
         }
         
-        const url = `${CONFIG.API_URL}?route=words&limit=200&excludeLearned=1&userId=${userId}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(data.error);
+        // ตรวจสอบว่ากำลังโหลดอยู่หรือไม่
+        const requestKey = 'words_' + userId;
+        if (pendingRequests.has(requestKey)) {
+            return pendingRequests.get(requestKey);
         }
         
-        const words = data.data || [];
+        const url = `${CONFIG.API_URL}?route=words&limit=200&excludeLearned=1&userId=${userId}`;
         
-        // เก็บ cache
-        setCachedData(CACHE_KEY + '_' + userId, words);
+        const requestPromise = fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                const words = data.data || [];
+                // เก็บ cache
+                setCachedData(CACHE_KEY + '_' + userId, words);
+                return words;
+            })
+            .catch(error => {
+                console.error('Error fetching words:', error);
+                alert('เกิดข้อผิดพลาดในการโหลดคำ: ' + error.message);
+                return [];
+            })
+            .finally(() => {
+                pendingRequests.delete(requestKey);
+            });
         
-        return words;
+        pendingRequests.set(requestKey, requestPromise);
+        return requestPromise;
     } catch (error) {
         console.error('Error fetching words:', error);
         alert('เกิดข้อผิดพลาดในการโหลดคำ: ' + error.message);
         return [];
     }
 }
+
+// Batch save queue สำหรับ performance
+let saveQueue = [];
+let saveTimeout = null;
 
 async function saveWordState(wordId, learned = false, hiddenForever = false) {
     try {
@@ -294,9 +378,8 @@ async function saveWordState(wordId, learned = false, hiddenForever = false) {
             throw new Error(data.error);
         }
         
-        // ลบ cache เพื่อบังคับ reload ครั้งถัดไป
-        localStorage.removeItem(CACHE_KEY + '_' + userId);
-        localStorage.removeItem(CACHE_STATS_KEY + '_' + userId);
+        // ลบ cache เพื่อบังคับ reload ครั้งถัดไป (แต่รอสักครั้ง)
+        debouncedCacheClear();
         
         return data;
     } catch (error) {
@@ -305,6 +388,14 @@ async function saveWordState(wordId, learned = false, hiddenForever = false) {
         return null;
     }
 }
+
+// Debounced cache clear เพื่อไม่ให้ลบ cache บ่อยเกินไป
+const debouncedCacheClear = debounce(() => {
+    localStorage.removeItem(CACHE_KEY + '_' + userId);
+    localStorage.removeItem(CACHE_STATS_KEY + '_' + userId);
+    memoryCache.delete(CACHE_KEY + '_' + userId);
+    memoryCache.delete(CACHE_STATS_KEY + '_' + userId);
+}, 1000);
 
 async function getHiddenWords() {
     try {
@@ -368,10 +459,10 @@ async function handleStart() {
     startBtn.disabled = true;
     startBtn.textContent = 'กำลังโหลด...';
     
-    // โหลดแบบ parallel ทั้ง words และ stats
+    // โหลดแบบ parallel ทั้ง words และ stats จาก API
     const [words] = await Promise.all([
         loadNewWords(),
-        fetchTotalStats() // prefetch stats ตอนโหลดคำ
+        fetchTotalStats()
     ]);
     
     if (wordPool.length === 0) {
@@ -382,10 +473,25 @@ async function handleStart() {
     }
     
     currentWordIndex = 0;
+    
+    // Prefetch คำถัดไป (ถ้ามี) เพื่อลดเวลารอ
+    if (wordPool.length > 1) {
+        prefetchNextCard();
+    }
+    
     showCard();
     
     startBtn.style.display = 'none';
     document.getElementById('cardActions').style.display = 'flex';
+}
+
+// Prefetch คำถัดไป
+function prefetchNextCard() {
+    if (currentWordIndex + 1 < wordPool.length) {
+        const nextWord = wordPool[currentWordIndex + 1];
+        // อาจจะ preload ข้อมูลหรือ prepare DOM ล่วงหน้า
+        // สำหรับตอนนี้ เราเก็บไว้ใน memory แล้ว ก็เร็วอยู่แล้ว
+    }
 }
 
 function handleNext() {
@@ -394,6 +500,11 @@ function handleNext() {
     if (currentWordIndex >= wordPool.length) {
         showEmptyState();
         return;
+    }
+    
+    // Prefetch คำถัดไป
+    if (currentWordIndex + 1 < wordPool.length) {
+        prefetchNextCard();
     }
     
     showCard();
@@ -406,14 +517,30 @@ async function handleLearnedAndNext() {
     
     const currentWord = wordPool[currentWordIndex];
     
-    // บันทึกว่าจำได้แล้ว (ใช้ learned = true)
+    // บันทึกไปยัง API
     await saveWordState(currentWord.id, true, false);
     
-    learnedCount++;
-    updateStats();
+    // ลบคำออกจาก wordPool
+    wordPool.splice(currentWordIndex, 1);
     
-    // ไปใบถัดไป
-    handleNext();
+    // ดึงข้อมูล stats ล่าสุดจาก API (background)
+    fetchTotalStats().then(stats => {
+        if (stats) {
+            totalWordsInSheet = stats.total || 0;
+            hiddenWordsCount = stats.hidden || 0;
+            learnedCount = stats.learned || 0;
+            updateStats();
+        }
+    });
+    
+    // เช็คว่ายังมีคำเหลือไหม
+    if (currentWordIndex >= wordPool.length) {
+        showEmptyState();
+        return;
+    }
+    
+    // แสดงการ์ดปัจจุบัน
+    showCard();
 }
 
 async function handleHideAndNext() {
@@ -423,14 +550,30 @@ async function handleHideAndNext() {
     
     const currentWord = wordPool[currentWordIndex];
     
-    // บันทึกว่าซ่อนถาวร (ใช้ hidden_forever = true)
+    // บันทึกไปยัง API
     await saveWordState(currentWord.id, false, true);
     
-    hiddenWordsCount++;
-    updateStats();
+    // ลบคำออกจาก wordPool
+    wordPool.splice(currentWordIndex, 1);
     
-    // ไปใบถัดไป
-    handleNext();
+    // ดึงข้อมูล stats ล่าสุดจาก API (background)
+    fetchTotalStats().then(stats => {
+        if (stats) {
+            totalWordsInSheet = stats.total || 0;
+            hiddenWordsCount = stats.hidden || 0;
+            learnedCount = stats.learned || 0;
+            updateStats();
+        }
+    });
+    
+    // เช็คว่ายังมีคำเหลือไหม
+    if (currentWordIndex >= wordPool.length) {
+        showEmptyState();
+        return;
+    }
+    
+    // แสดงการ์ดปัจจุบัน
+    showCard();
 }
 
 function handleTranslationToggle(e) {
@@ -466,32 +609,51 @@ async function openHiddenModal() {
         return;
     }
     
-    // แสดงจำนวนคำที่จำได้
-    let html = `
-        <div class="learned-count-badge">
-            <span class="count-icon">🎯</span>
-            <span class="count-text">จำได้แล้ว</span>
-            <span class="count-number">${hiddenWords.length}</span>
-        </div>
-        <div class="hidden-words-list">
+    // ใช้ DocumentFragment สำหรับประสิทธิภาพ
+    const fragment = document.createDocumentFragment();
+    
+    // สร้าง badge
+    const badge = document.createElement('div');
+    badge.className = 'learned-count-badge';
+    badge.innerHTML = `
+        <span class="count-icon">🎯</span>
+        <span class="count-text">จำได้แล้ว</span>
+        <span class="count-number">${hiddenWords.length}</span>
     `;
+    fragment.appendChild(badge);
     
+    // สร้าง list container
+    const wordsListDiv = document.createElement('div');
+    wordsListDiv.className = 'hidden-words-list';
+    
+    // สร้าง word items - ไม่ใช้ inline event handlers
     hiddenWords.forEach(word => {
-        html += `
-            <div class="hidden-word-item" data-word-id="${word.id}">
-                <div class="word-info">
-                    <strong>${word.word}</strong>
-                    <span class="translation-small">${word.translation}</span>
-                </div>
-                <button class="btn btn-unhide" onclick="handleUnhide('${word.id}')">
-                    ยกเลิกการจำ
-                </button>
-            </div>
+        const item = document.createElement('div');
+        item.className = 'hidden-word-item';
+        item.setAttribute('data-word-id', word.id);
+        
+        const wordInfo = document.createElement('div');
+        wordInfo.className = 'word-info';
+        wordInfo.innerHTML = `
+            <strong>${word.word}</strong>
+            <span class="translation-small">${word.translation}</span>
         `;
+        
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-unhide';
+        btn.textContent = 'ยกเลิกการจำ';
+        btn.setAttribute('data-word-id', word.id);
+        
+        item.appendChild(wordInfo);
+        item.appendChild(btn);
+        wordsListDiv.appendChild(item);
     });
-    html += '</div>';
     
-    listContainer.innerHTML = html;
+    fragment.appendChild(wordsListDiv);
+    
+    // อัปเดต DOM ครั้งเดียว
+    listContainer.innerHTML = '';
+    listContainer.appendChild(fragment);
 }
 
 function closeHiddenModal() {
@@ -531,13 +693,13 @@ async function handleUnhide(wordId) {
 
 // ===================== UI UPDATE =====================
 async function loadNewWords() {
-    // ดึงสถิติทั้งหมด
+    // ดึงสถิติทั้งหมดจาก API
     const stats = await fetchTotalStats();
     totalWordsInSheet = stats.total || 0;
     hiddenWordsCount = stats.hidden || 0;
     learnedCount = stats.learned || 0;
     
-    // ดึงคำสำหรับแสดง
+    // ดึงคำจาก API
     wordPool = await fetchWords();
     
     // สุ่มเพิ่มฝั่ง client
@@ -546,56 +708,87 @@ async function loadNewWords() {
     currentWordIndex = 0;
     updateStats();
     
+    // เช็ค empty state อย่างถูกต้อง
     if (wordPool.length === 0) {
         showEmptyState();
     } else {
         hideEmptyState();
     }
+    
+    return wordPool;
 }
 
 function showCard() {
-    if (currentWordIndex >= wordPool.length) {
+    // เช็คก่อนว่ามีคำเหลือไหม
+    if (wordPool.length === 0 || currentWordIndex >= wordPool.length) {
         showEmptyState();
         return;
     }
     
     const currentWord = wordPool[currentWordIndex];
     
-    // แสดงคำหลัก
+    // ป้องกันถ้า currentWord เป็น undefined
+    if (!currentWord) {
+        console.error('No current word at index:', currentWordIndex, 'Pool length:', wordPool.length);
+        showEmptyState();
+        return;
+    }
+    
+    // Cache DOM elements
     const wordElement = document.getElementById('word');
-    wordElement.textContent = currentWord.word || '-';
-    
-    // Auto-scale font based on word length
-    const wordLength = (currentWord.word || '').length;
-    wordElement.removeAttribute('data-length');
-    if (wordLength > 15) {
-        wordElement.setAttribute('data-length', 'extra-long');
-    } else if (wordLength > 12) {
-        wordElement.setAttribute('data-length', 'very-long');
-    } else if (wordLength > 8) {
-        wordElement.setAttribute('data-length', 'long');
-    }
-    
-    // แสดง POS (Parts of Speech)
     const posTag = document.getElementById('posTag');
-    if (posTag) {
-        posTag.textContent = currentWord.pos || '-';
-        posTag.style.display = currentWord.pos ? 'inline-block' : 'none';
-    }
-    
-    // แสดง Level
     const levelTag = document.getElementById('levelTag');
-    if (levelTag) {
-        levelTag.textContent = currentWord.level || '-';
-        levelTag.style.display = currentWord.level ? 'inline-block' : 'none';
-    }
+    const pronunciationText = document.getElementById('pronunciationText');
+    const translationText = document.getElementById('translationText');
+    const showTranslationToggle = document.getElementById('showTranslationToggle');
+    const translationContent = document.getElementById('translationContent');
     
-    // แสดงคำแปล
-    document.getElementById('translationText').textContent = currentWord.translation || '-';
-    
-    // รีเซ็ต translation toggle (ปิดทุกครั้ง)
-    document.getElementById('showTranslationToggle').checked = false;
-    document.getElementById('translationContent').style.display = 'none';
+    // Batch DOM updates
+    requestAnimationFrame(() => {
+        // แสดงคำหลัก
+        wordElement.textContent = currentWord.word || '-';
+        
+        // Auto-scale font based on word length
+        const wordLength = (currentWord.word || '').length;
+        wordElement.removeAttribute('data-length');
+        if (wordLength > 15) {
+            wordElement.setAttribute('data-length', 'extra-long');
+        } else if (wordLength > 12) {
+            wordElement.setAttribute('data-length', 'very-long');
+        } else if (wordLength > 8) {
+            wordElement.setAttribute('data-length', 'long');
+        }
+        
+        // แสดง POS (Parts of Speech)
+        if (posTag) {
+            posTag.textContent = currentWord.pos || '-';
+            posTag.style.display = currentWord.pos ? 'inline-block' : 'none';
+        }
+        
+        // แสดง Level
+        if (levelTag) {
+            levelTag.textContent = currentWord.level || '-';
+            levelTag.style.display = currentWord.level ? 'inline-block' : 'none';
+        }
+        
+        // แสดง Pronunciation
+        if (pronunciationText) {
+            pronunciationText.textContent = currentWord.pronunciation || '-';
+        }
+        
+        // แสดงคำแปล
+        if (translationText) {
+            translationText.textContent = currentWord.translation || '-';
+        }
+        
+        // รีเซ็ต translation toggle (ปิดทุกครั้ง)
+        if (showTranslationToggle) {
+            showTranslationToggle.checked = false;
+        }
+        if (translationContent) {
+            translationContent.style.display = 'none';
+        }
+    });
     
     hideEmptyState();
     updateStats();
@@ -612,15 +805,25 @@ function hideEmptyState() {
     document.getElementById('emptyState').style.display = 'none';
 }
 
+// Batch update stats with requestAnimationFrame for better performance
+let statsUpdateScheduled = false;
+
 function updateStats() {
-    // แสดงจำนวนคำทั้งหมดที่เหลือในระบบ (ไม่นับคำที่ซ่อนหรือจำได้แล้ว)
-    const remainingInSystem = totalWordsInSheet - hiddenWordsCount - learnedCount;
-    document.getElementById('remainingCount').textContent = Math.max(0, remainingInSystem);
+    if (statsUpdateScheduled) return;
     
-    const hiddenWordsCountElement = document.getElementById('hiddenWordsCount');
-    if (hiddenWordsCountElement) {
-        hiddenWordsCountElement.textContent = hiddenWordsCount;
-    }
+    statsUpdateScheduled = true;
+    requestAnimationFrame(() => {
+        // แสดงจำนวนคำทั้งหมดที่เหลือในระบบ (ไม่นับคำที่ซ่อนหรือจำได้แล้ว)
+        const remainingInSystem = totalWordsInSheet - hiddenWordsCount - learnedCount;
+        document.getElementById('remainingCount').textContent = Math.max(0, remainingInSystem);
+        
+        // แสดงจำนวนคำที่จำได้แล้วจาก API
+        const hiddenWordsCountElement = document.getElementById('hiddenWordsCount');
+        if (hiddenWordsCountElement) {
+            hiddenWordsCountElement.textContent = hiddenWordsCount;
+        }
+        statsUpdateScheduled = false;
+    });
 }
 
 function updateUI() {
@@ -628,6 +831,7 @@ function updateUI() {
 }
 
 // ===================== UTILITIES =====================
+// Fisher-Yates shuffle - optimized
 function shuffleArray(array) {
     const arr = [...array];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -635,4 +839,17 @@ function shuffleArray(array) {
         [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
+}
+
+// Debounce utility
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
