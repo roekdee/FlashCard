@@ -1,0 +1,10 @@
+# local scratch
+*.bak
+*.log
+.DS_Store
+
+# never commit the Supabase service_role key or anything derived from the
+# old spreadsheet export (it held plain-text passwords)
+.env
+.env.*
+supabase/seed/legacy_*.json
