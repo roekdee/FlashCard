@@ -420,8 +420,12 @@ kbd {
 
 /* ===================== RESPONSIVE ===================== */
 @media (max-width: 768px) {
-    .stats { flex-wrap: wrap; }
-    .stats .stat-item { flex: 1 1 40%; padding: 14px; }
+    /* styles.css stacks the stat cards one per row; four of them fills the
+       screen before you reach a card, so lay them out two by two instead */
+    .stats { flex-direction: row; flex-wrap: wrap; gap: 10px; }
+    .stats .stat-item { flex: 1 1 40%; padding: 12px 8px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .stat-label { font-size: 0.6875rem; }
     .stat-value { font-size: 1.5rem; }
     .grade-row { grid-template-columns: repeat(2, 1fr); }
     .tab { padding: 10px 12px; font-size: 0.8125rem; }

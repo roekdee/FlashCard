@@ -580,12 +580,13 @@ function renderLevelBars(byLevel) {
     box.innerHTML = '';
     Object.entries(LEVEL_TOTALS).forEach(([level, total]) => {
         const done = byLevel[level] || 0;
-        const pct = Math.min(100, Math.round((done / total) * 100));
+        // 1 of 751 rounds to 0% and the bar vanishes; show a sliver instead
+        const pct = done ? Math.max(1.5, Math.min(100, (done / total) * 100)) : 0;
         const row = document.createElement('div');
         row.className = 'level-bar';
         row.innerHTML = `
             <span class="level-bar-name">${level}</span>
-            <span class="level-bar-track"><span class="level-bar-fill" style="width:${pct}%"></span></span>
+            <span class="level-bar-track"><span class="level-bar-fill" style="width:${pct.toFixed(2)}%"></span></span>
             <span class="level-bar-value">${done}/${total}</span>`;
         box.appendChild(row);
     });
@@ -621,6 +622,7 @@ function renderHeatmap(map) {
         frag.appendChild(col);
     }
     box.appendChild(frag);
+    box.scrollLeft = box.scrollWidth;   // a year is wider than the panel; show recent days
 }
 
 async function saveGoal() {
