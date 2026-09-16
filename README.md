@@ -63,9 +63,15 @@ Files:
 - **`supabase/migrations/`** — the whole schema, the SM-2 implementation and the RLS policies.
 - **`supabase/seed/`** — the 3,025-word catalogue as JSON.
 
+## Live
+
+**https://oxford3000-flashcards.netlify.app**
+
 ## Setup
 
-Full steps in **[QUICKSTART.md](QUICKSTART.md)**. Short version: create a Supabase project, run the five migrations, load the seed, put your project URL and publishable key in `api.js`, and serve the folder as a static site.
+Full steps in **[QUICKSTART.md](QUICKSTART.md)**. Short version: create a Supabase project, run the migrations, load the seed, put your project URL and publishable key in `api.js`, and serve the folder as a static site.
+
+There is no build step — the repository root *is* the site. `./build.sh` only exists to bundle the runtime files into a zip for a Netlify drag-and-drop deploy; connect the Git repository instead and every push deploys itself.
 
 The publishable key is *meant* to be in the browser — RLS is what protects the data, and the policies are in `0001_core_schema.sql` if you want to check them.
 
