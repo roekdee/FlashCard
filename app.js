@@ -1,15 +1,18 @@
 /**
  * Oxford 3000 Flashcards — UI.
  *
- * The scheduling lives in Postgres (see api.js and supabase/migrations/).
- * This file is presentation and input handling only.
+ * The scheduling and the Free/Pro limits live in Postgres (see api.js and
+ * supabase/migrations/). This file is presentation and input handling: where it
+ * hides a control for a Free account it is a courtesy, not the gate — the
+ * database refuses the call regardless.
  */
-import * as api from './api.js';
+import * as api from './api.js?v=dev';
 
 // ===================== STATE =====================
 const state = {
-    profile: null,
+    account: null,
     stats: null,
+    billing: null,
     queue: [],
     index: 0,
     revealed: false,
@@ -17,90 +20,124 @@ const state = {
     levels: [],
     pos: '',
     answering: false,
-    signupMode: false
+    authMode: 'signin',
+    selectedPlan: null,
+    payMethod: 'promptpay',
+    rankMetric: 'week'
 };
 
 const $ = (id) => document.getElementById(id);
 const show = (el, on) => { if (el) el.hidden = !on; };
+const isPro = () => Boolean(state.account?.is_pro ?? state.stats?.is_pro);
+const allowedModes = () => state.stats?.modes || ['flip'];
+const allowedLevels = () => state.stats?.levels || null;
 
 // ===================== BOOT =====================
 document.addEventListener('DOMContentLoaded', async () => {
     bindAuthUI();
     registerServiceWorker();
 
-    const { data: { session } } = await api.supabase.auth.getSession();
-    if (session) {
-        await enterApp();
-    } else {
-        showLogin();
-    }
+    // Supabase puts the recovery session in the URL fragment before we get here.
+    const recovering = location.hash.includes('type=recovery') || location.hash === '#reset';
 
-    api.supabase.auth.onAuthStateChange((event) => {
-        if (event === 'SIGNED_OUT') location.reload();
+    api.supabase.auth.onAuthStateChange(async (event) => {
+        if (event === 'SIGNED_OUT') return location.reload();
+        if (event === 'PASSWORD_RECOVERY') return showReset();
+        if (event === 'SIGNED_IN' && $('mainApp').hidden && !recovering) await enterApp();
     });
+
+    const { data: { session } } = await api.supabase.auth.getSession();
+    if (recovering && session) showReset();
+    else if (session) await enterApp();
+    else showLogin();
 
     window.addEventListener('online', async () => {
         setConn(true);
         const sent = await api.flushOutbox();
-        if (sent) {
-            toast(`ส่งผลทบทวนที่ค้างไว้ ${sent} รายการแล้ว`);
-            refreshStats();
-        }
+        if (sent) { toast(`ส่งผลทบทวนที่ค้างไว้ ${sent} รายการแล้ว`); refreshStats(); }
     });
     window.addEventListener('offline', () => setConn(false));
 });
 
 function registerServiceWorker() {
-    if (!('serviceWorker' in navigator)) return;
-    if (location.protocol === 'file:') return;
+    if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
     navigator.serviceWorker.register('sw.js').catch(() => { /* not fatal */ });
 }
 
 // ===================== AUTH =====================
 function bindAuthUI() {
-    $('loginBtn').addEventListener('click', submitAuth);
+    $('authTabs').addEventListener('click', (e) => {
+        const tab = e.target.closest('.auth-tab');
+        if (tab) setAuthMode(tab.dataset.mode);
+    });
+    $('submitAuthBtn').addEventListener('click', submitAuth);
     $('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAuth(); });
-    $('username').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('password').focus(); });
-    $('authSwitchBtn').addEventListener('click', toggleAuthMode);
+    $('identifier').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('password').focus(); });
+    $('googleBtn').addEventListener('click', async () => {
+        try { await api.signInWithGoogle(); }
+        catch (err) { authError(err.message); }
+    });
+    $('forgotBtn').addEventListener('click', forgotPassword);
+    $('resetSubmitBtn').addEventListener('click', submitReset);
 }
 
-function toggleAuthMode() {
-    state.signupMode = !state.signupMode;
-    $('authTitle').textContent = state.signupMode ? 'สมัครสมาชิก' : 'เข้าสู่ระบบ';
-    $('loginBtn').textContent = state.signupMode ? '✨ สมัครสมาชิก' : '🚀 เข้าสู่ระบบ';
-    $('authSwitchText').textContent = state.signupMode ? 'มีบัญชีอยู่แล้ว?' : 'ยังไม่มีบัญชี?';
-    $('authSwitchBtn').textContent = state.signupMode ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก';
-    $('password').autocomplete = state.signupMode ? 'new-password' : 'current-password';
+function setAuthMode(mode) {
+    state.authMode = mode;
+    const signup = mode === 'signup';
+    document.querySelectorAll('.auth-tab').forEach((t) =>
+        t.classList.toggle('is-active', t.dataset.mode === mode));
+
+    show($('usernameGroup'), signup);
+    $('identifierLabel').textContent = '📧 อีเมล';
+    $('identifier').type = 'email';
+    $('identifier').placeholder = 'you@example.com';
+    $('identifierHint').textContent = signup
+        ? 'ใช้กู้รหัสผ่านและรับใบเสร็จ'
+        : 'บัญชีเดิมใช้ชื่อผู้ใช้ก็ได้';
+    $('password').autocomplete = signup ? 'new-password' : 'current-password';
+    $('submitAuthBtn').textContent = signup ? '✨ สมัครสมาชิก' : '🚀 เข้าสู่ระบบ';
+    show($('forgotBtn').parentElement, !signup);
     authError('');
+    authNotice('');
 }
 
-function authError(msg) {
-    const el = $('authError');
-    el.textContent = msg;
-    show(el, Boolean(msg));
-}
+const authError = (msg) => { $('authError').textContent = msg; show($('authError'), Boolean(msg)); };
+const authNotice = (msg) => { $('authNotice').textContent = msg; show($('authNotice'), Boolean(msg)); };
 
 async function submitAuth() {
-    const username = $('username').value.trim();
+    const identifier = $('identifier').value.trim();
     const password = $('password').value;
-    authError('');
+    const signup = state.authMode === 'signup';
+    authError(''); authNotice('');
 
-    if (username.length < 3) return authError('ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร');
-    // Only new passwords have to clear the bar — accounts carried over from the
-    // old spreadsheet have shorter ones and must still be able to sign in.
-    if (state.signupMode && password.length < 8) return authError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร');
-    if (!password) return authError('กรุณากรอกรหัสผ่าน');
+    if (!identifier) return authError('กรอกอีเมลก่อน');
+    if (signup && !/\S+@\S+\.\S+/.test(identifier)) return authError('กรอกอีเมลให้ถูกต้อง');
+    if (signup && password.length < 8) return authError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร');
+    if (!password) return authError('กรอกรหัสผ่าน');
 
-    const btn = $('loginBtn');
+    const username = $('signupUsername').value.trim().toLowerCase();
+    if (signup) {
+        if (!/^[a-z0-9_]{3,32}$/.test(username)) {
+            return authError('ชื่อผู้ใช้ใช้ได้เฉพาะ a-z, 0-9, _ และยาว 3-32 ตัวอักษร');
+        }
+        const free = await api.usernameAvailable(username).catch(() => true);
+        if (!free) return authError('ชื่อผู้ใช้นี้ถูกใช้แล้ว');
+    }
+
+    const btn = $('submitAuthBtn');
     const label = btn.textContent;
     btn.disabled = true;
     btn.textContent = '🔄 กำลังดำเนินการ...';
 
     try {
-        if (state.signupMode) {
-            await api.signUp(username, password);
+        if (signup) {
+            const { needsConfirmation } = await api.signUp({ email: identifier, password, username });
+            if (needsConfirmation) {
+                authNotice('สมัครแล้ว — เปิดลิงก์ยืนยันในอีเมลก่อนเข้าสู่ระบบ');
+                return;
+            }
         } else {
-            await api.signIn(username, password);
+            await api.signIn(identifier, password);
         }
         await enterApp();
     } catch (err) {
@@ -111,28 +148,92 @@ async function submitAuth() {
     }
 }
 
+async function forgotPassword() {
+    const email = $('identifier').value.trim();
+    if (!/\S+@\S+\.\S+/.test(email)) {
+        return authError('กรอกอีเมลในช่องด้านบนก่อน แล้วกดลืมรหัสผ่านอีกครั้ง');
+    }
+    try {
+        await api.sendPasswordReset(email);
+        authNotice('ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลแล้ว');
+    } catch (err) {
+        authError(err.message);
+    }
+}
+
 function showLogin() {
     show($('loginScreen'), true);
+    show($('resetScreen'), false);
     show($('mainApp'), false);
+    setAuthMode('signin');
+}
+
+function showReset() {
+    show($('loginScreen'), false);
+    show($('mainApp'), false);
+    show($('resetScreen'), true);
+}
+
+async function submitReset() {
+    const password = $('resetPassword').value;
+    const err = $('resetError');
+    if (password.length < 8) {
+        err.textContent = 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร';
+        return show(err, true);
+    }
+    show(err, false);
+    try {
+        await api.setNewPassword(password);
+        history.replaceState(null, '', location.pathname);
+        toast('เปลี่ยนรหัสผ่านแล้ว');
+        await enterApp();
+    } catch (e) {
+        err.textContent = e.message;
+        show(err, true);
+    }
 }
 
 async function enterApp() {
     show($('loginScreen'), false);
+    show($('resetScreen'), false);
     show($('mainApp'), true);
+    if (location.hash) history.replaceState(null, '', location.pathname);
 
     bindAppUI();
     restorePreferences();
 
-    const [profile] = await Promise.all([api.getProfile(), refreshStats(), loadPosOptions()]);
-    state.profile = profile;
-    $('currentUsername').textContent = profile?.username || '-';
-    $('dailyGoalInput').value = profile?.daily_goal ?? 20;
-    $('newPerDayInput').value = profile?.new_per_day ?? 20;
+    const [account] = await Promise.all([
+        api.getAccount().catch(() => null),
+        refreshStats(),
+        loadPosOptions()
+    ]);
+    state.account = account;
+    applyAccount();
 
     api.flushOutbox().then((n) => { if (n) refreshStats(); });
 }
 
-// ===================== APP UI BINDING =====================
+function applyAccount() {
+    const a = state.account;
+    if (!a) return;
+    $('currentUsername').textContent = a.username || '-';
+    $('usernameInput').value = a.username || '';
+    $('emailInput').value = a.email || '';
+    $('leaderboardToggle').checked = Boolean(a.show_on_leaderboard);
+    $('dailyGoalInput').value = a.daily_goal ?? 20;
+    $('newPerDayInput').value = a.new_per_day ?? 20;
+
+    show($('emailBanner'), Boolean(a.needs_email));
+    show($('planPill'), Boolean(a.is_pro));
+
+    $('accountRows').innerHTML = `
+        <div class="account-row"><span>อีเมล</span><strong>${escapeHtml(a.email || 'ยังไม่ได้ตั้ง')}</strong></div>
+        <div class="account-row"><span>เข้าสู่ระบบด้วย</span><strong>${escapeHtml(a.provider || 'email')}</strong></div>
+        <div class="account-row"><span>แพ็กเกจ</span><strong>${a.is_pro ? 'Pro' : 'Free'}</strong></div>
+        ${a.pro_until ? `<div class="account-row"><span>Pro ถึง</span><strong>${formatDate(a.pro_until)}</strong></div>` : ''}`;
+}
+
+// ===================== APP UI =====================
 let bound = false;
 function bindAppUI() {
     if (bound) return;
@@ -140,6 +241,9 @@ function bindAppUI() {
 
     document.querySelectorAll('.tab').forEach((tab) =>
         tab.addEventListener('click', () => switchView(tab.dataset.view)));
+    document.querySelectorAll('[data-goto-pro]').forEach((b) =>
+        b.addEventListener('click', () => switchView('pro')));
+    $('emptyUpgradeBtn').addEventListener('click', () => switchView('pro'));
 
     $('logoutBtn').addEventListener('click', async () => {
         if (!confirm('🚪 ต้องการออกจากระบบใช่หรือไม่?')) return;
@@ -150,7 +254,6 @@ function bindAppUI() {
     $('startBtn').addEventListener('click', startSession);
     $('skipBtn').addEventListener('click', skipCard);
     $('undoBtn').addEventListener('click', undoLast);
-    $('changePasswordBtn').addEventListener('click', changePassword);
     $('hideBtn').addEventListener('click', suspendCurrent);
     $('speakBtn').addEventListener('click', () => speak(currentWord()?.word));
     $('showTranslationToggle').addEventListener('change', (e) => reveal(e.target.checked));
@@ -166,9 +269,7 @@ function bindAppUI() {
     $('posSelect').addEventListener('change', (e) => {
         state.pos = e.target.value; savePreferences(); startSession();
     });
-    $('modeSelect').addEventListener('change', (e) => {
-        state.mode = e.target.value; savePreferences(); if (state.queue.length) showCard();
-    });
+    $('modeSelect').addEventListener('change', onModeChange);
 
     $('viewHiddenBtn').addEventListener('click', openSuspendedModal);
     $('closeModalBtn').addEventListener('click', () => show($('hiddenModal'), false));
@@ -187,23 +288,78 @@ function bindAppUI() {
         if (btn) answerQuiz(btn);
     });
     $('typingInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') answerTyping(); });
+
     $('saveGoalBtn').addEventListener('click', saveGoal);
+    $('changePasswordBtn').addEventListener('click', changePassword);
+    $('saveUsernameBtn').addEventListener('click', saveUsername);
+    $('saveEmailBtn').addEventListener('click', saveEmail);
+    $('bannerAddEmail').addEventListener('click', () => {
+        switchView('stats');
+        $('emailInput').scrollIntoView({ block: 'center' });
+        $('emailInput').focus();
+    });
+    $('leaderboardToggle').addEventListener('change', async (e) => {
+        try {
+            await api.saveSettings({ showOnLeaderboard: e.target.checked });
+            toast(e.target.checked ? 'จะแสดงชื่อบนกระดานแล้ว' : 'ซ่อนชื่อจากกระดานแล้ว');
+        } catch (err) { toast(err.message); }
+    });
+
+    bindChips('metricChips', null, (chip) => {
+        document.querySelectorAll('#metricChips .chip').forEach((c) =>
+            c.classList.toggle('is-active', c === chip));
+        state.rankMetric = chip.dataset.metric;
+        renderLeaderboard();
+    });
+
+    bindChips('payMethodChips', null, (chip) => {
+        document.querySelectorAll('#payMethodChips .chip').forEach((c) =>
+            c.classList.toggle('is-active', c === chip));
+        state.payMethod = chip.dataset.method;
+        show($('cardForm'), state.payMethod === 'card');
+    });
+
+    $('planGrid').addEventListener('click', (e) => {
+        const card = e.target.closest('.plan-card');
+        if (!card) return;
+        state.selectedPlan = card.dataset.code;
+        document.querySelectorAll('.plan-card').forEach((c) =>
+            c.classList.toggle('is-selected', c === card));
+        show($('payPanel'), true);
+        $('payNote').textContent = card.dataset.note || '';
+    });
+    $('payBtn').addEventListener('click', pay);
 
     document.addEventListener('keydown', onKey);
 }
 
-function bindChips(containerId, onChange) {
+/** Multi-select chips by default; pass onPick for single-select behaviour. */
+function bindChips(containerId, onChange, onPick) {
     const box = $(containerId);
+    if (!box) return;
     box.addEventListener('click', (e) => {
         const chip = e.target.closest('.chip');
-        if (!chip) return;
+        if (!chip || chip.disabled) return;
+        if (onPick) return onPick(chip);
         chip.classList.toggle('is-active');
         onChange(selectedChips(containerId));
     });
 }
 
 const selectedChips = (id) =>
-    [...$(id).querySelectorAll('.chip.is-active')].map((c) => c.dataset.level);
+    [...$(id).querySelectorAll('.chip.is-active')].map((c) => c.dataset.level).filter(Boolean);
+
+function onModeChange(e) {
+    const mode = e.target.value;
+    if (!allowedModes().includes(mode)) {
+        e.target.value = state.mode;
+        toast('โหมดนี้ใช้ได้เฉพาะสมาชิก Pro');
+        return switchView('pro');
+    }
+    state.mode = mode;
+    savePreferences();
+    if (state.queue.length) showCard();
+}
 
 function onKey(e) {
     if (!$('hiddenModal').hidden) {
@@ -226,12 +382,48 @@ function onKey(e) {
 function switchView(view) {
     document.querySelectorAll('.tab').forEach((t) =>
         t.classList.toggle('is-active', t.dataset.view === view));
-    show($('studyView'), view === 'study');
-    show($('browseView'), view === 'browse');
-    show($('statsView'), view === 'stats');
+    ['study', 'browse', 'stats', 'rank', 'pro'].forEach((name) =>
+        show($(name + 'View'), name === view));
 
-    if (view === 'stats') renderStats();
+    if (view === 'stats') { renderStats(); renderBadges(); }
+    if (view === 'rank') renderLeaderboard();
+    if (view === 'pro') renderPro();
     if (view === 'browse' && !$('browseResults').childElementCount) runSearch();
+}
+
+// ===================== PLAN GATING (cosmetic; the DB is the gate) =====================
+function applyPlanToUI() {
+    const modes = allowedModes();
+    [...$('modeSelect').options].forEach((opt) => {
+        const locked = !modes.includes(opt.value);
+        opt.disabled = locked;
+        opt.textContent = opt.textContent.replace(/ 🔒$/, '') + (locked ? ' 🔒' : '');
+    });
+    if (!modes.includes(state.mode)) {
+        state.mode = 'flip';
+        $('modeSelect').value = 'flip';
+    }
+
+    const levels = allowedLevels();
+    $('levelChips').querySelectorAll('.chip').forEach((chip) => {
+        const locked = Boolean(levels) && !levels.includes(chip.dataset.level);
+        chip.disabled = locked;
+        chip.classList.toggle('is-locked', locked);
+        chip.title = locked ? 'ระดับนี้ใช้ได้เฉพาะสมาชิก Pro' : '';
+        if (locked) chip.classList.remove('is-active');
+    });
+
+    const pro = isPro();
+    show($('planPill'), pro);
+    show($('streakTile'), pro);
+    show($('forecastLock'), !pro);
+    show($('forecastBars'), pro);
+    show($('heatmapLock'), !pro);
+    show($('heatmap'), pro);
+    document.querySelector('.heatmap-legend').hidden = !pro;
+    $('newPerDayHint').textContent = pro
+        ? '“คำใหม่ต่อวัน” คือเพดานคำที่ยังไม่เคยเห็น กันไม่ให้กองทบทวนพอกจนตามไม่ทัน'
+        : 'บัญชีฟรีจำกัดคำใหม่ไว้ 10 คำต่อวัน — ตั้งได้สูงกว่านี้เมื่อเป็น Pro';
 }
 
 // ===================== PREFERENCES =====================
@@ -270,7 +462,7 @@ async function loadPosOptions() {
     } catch { /* filter stays "ทั้งหมด" */ }
 }
 
-// ===================== STUDY SESSION =====================
+// ===================== STUDY =====================
 const currentWord = () => state.queue[state.index];
 
 async function startSession() {
@@ -318,6 +510,9 @@ function showCard() {
     setTag($('levelTag'), card.level);
     $('pronunciationText').textContent = card.pronunciation || '—';
     $('translationText').textContent = card.translation || '—';
+    $('cardSchedule').textContent = card.is_new
+        ? '✨ คำใหม่'
+        : `ทบทวนครั้งที่ ${card.repetitions} · ช่วงห่าง ${card.interval_days} วัน`;
 
     const hasExample = Boolean(card.example_en);
     show($('exampleBlock'), hasExample);
@@ -326,14 +521,8 @@ function showCard() {
         $('exampleTh').textContent = card.example_th || '';
     }
 
-    $('cardSchedule').textContent = card.is_new
-        ? '✨ คำใหม่'
-        : `ทบทวนครั้งที่ ${card.repetitions} · ช่วงห่าง ${card.interval_days} วัน`;
-
-    // grade buttons show what each answer will do to the schedule
     document.querySelectorAll('[data-hint]').forEach((el) => {
-        const g = Number(el.dataset.hint);
-        el.textContent = formatInterval(previewInterval(card, g));
+        el.textContent = formatInterval(previewInterval(card, Number(el.dataset.hint)));
     });
 
     state.revealed = false;
@@ -367,44 +556,25 @@ async function grade(value) {
     if (!card) return;
 
     state.answering = true;
-    // optimistic: the card leaves the queue immediately, the write happens behind it
     const wordId = card.id;
     advance();
 
     try {
         await api.reviewCardResilient(wordId, value, state.mode);
         bumpToday();
-        $('undoBtn').disabled = false;   // only a stored review can be undone
-    } catch {
-        setConn(false);
-        toast('ออฟไลน์ — เก็บผลไว้ส่งทีหลังแล้ว');
+        $('undoBtn').disabled = false;
+    } catch (err) {
+        if (/Pro/i.test(err.message)) {
+            toast(err.message);
+            switchView('pro');
+        } else {
+            setConn(false);
+            toast('ออฟไลน์ — เก็บผลไว้ส่งทีหลังแล้ว');
+        }
     } finally {
         state.answering = false;
     }
     debouncedStats();
-}
-
-/** Put the last answer back — the card returns to the front of the session. */
-async function undoLast() {
-    const btn = $('undoBtn');
-    btn.disabled = true;
-    try {
-        const result = await api.undoLastReview();
-        if (!result?.ok) return toast(result?.error || 'ย้อนกลับไม่สำเร็จ');
-
-        toast(`ย้อน "${result.word}" กลับแล้ว`);
-        await reloadQueue();
-
-        // bring the restored word back to the top of the deck
-        const index = state.queue.findIndex((card) => card.id === result.word_id);
-        if (index > -1) {
-            state.index = index;
-            showCard();
-        }
-    } catch (err) {
-        toast('ย้อนกลับไม่สำเร็จ: ' + err.message);
-        btn.disabled = false;
-    }
 }
 
 /** Drop the current card from the session — it has been answered. */
@@ -447,15 +617,20 @@ function showEmpty() {
     const budgetSpent = (s.new_today ?? 0) >= (s.new_per_day ?? 20);
     const nothingDue = (s.due_now ?? 0) === 0;
     const anyFilter = state.levels.length || state.pos;
+    const free = !isPro();
 
-    let title, sub;
+    let title, sub, offerPro = false;
     if ((s.remaining ?? 1) <= 0) {
-        title = 'เรียนครบทุกคำแล้ว!';
-        sub = 'ไม่เหลือคำใหม่ในคลังอีกแล้ว';
+        title = free ? 'เรียนครบทุกคำในระดับฟรีแล้ว!' : 'เรียนครบทุกคำแล้ว!';
+        sub = free ? 'ปลดล็อก B1 และ B2 อีก 1,513 คำด้วย Pro' : 'ไม่เหลือคำใหม่ในคลังอีกแล้ว';
+        offerPro = free;
     } else if (nothingDue && budgetSpent) {
         title = 'ครบโควตาคำใหม่ของวันนี้แล้ว';
-        sub = `วันนี้เปิดคำใหม่ไป ${s.new_today} คำ (เพดาน ${s.new_per_day}) · `
-            + 'อยากเรียนต่อวันนี้ ไปเพิ่ม "คำใหม่ต่อวัน" ที่แท็บสถิติ';
+        sub = free
+            ? `บัญชีฟรีเปิดคำใหม่ได้วันละ ${s.new_per_day} คำ · Pro ไม่จำกัด`
+            : `วันนี้เปิดคำใหม่ไป ${s.new_today} คำ (เพดาน ${s.new_per_day}) · `
+              + 'อยากเรียนต่อวันนี้ ไปเพิ่ม "คำใหม่ต่อวัน" ที่แท็บสถิติ';
+        offerPro = free;
     } else if (anyFilter) {
         title = 'ไม่มีคำตามตัวกรองนี้';
         sub = 'ลองเอาตัวกรองระดับหรือชนิดคำออก';
@@ -465,6 +640,26 @@ function showEmpty() {
     }
     $('emptyTitle').textContent = title;
     $('emptySub').textContent = sub;
+    show($('emptyUpgradeBtn'), offerPro);
+}
+
+/** Put the last answer back — the card returns to the deck. */
+async function undoLast() {
+    const btn = $('undoBtn');
+    btn.disabled = true;
+    try {
+        const result = await api.undoLastReview();
+        if (!result?.ok) return toast(result?.error || 'ย้อนกลับไม่สำเร็จ');
+
+        toast(`ย้อน "${result.word}" กลับแล้ว`);
+        await reloadQueue();
+
+        const index = state.queue.findIndex((card) => card.id === result.word_id);
+        if (index > -1) { state.index = index; showCard(); }
+    } catch (err) {
+        toast('ย้อนกลับไม่สำเร็จ: ' + err.message);
+        btn.disabled = false;
+    }
 }
 
 async function suspendCurrent() {
@@ -483,16 +678,15 @@ async function suspendCurrent() {
     }
 }
 
-// ===================== QUIZ MODE =====================
+// ===================== QUIZ =====================
 async function buildQuiz(card) {
     const box = $('quizOptions');
     box.innerHTML = '<p class="loading">กำลังเตรียมตัวเลือก...</p>';
     let options = [];
-    try {
-        options = await api.getQuizOptions(card.id);
-    } catch { /* fall back to a plain reveal below */ }
+    try { options = await api.getQuizOptions(card.id); }
+    catch { /* fall back to a plain reveal below */ }
 
-    if (currentWord()?.id !== card.id) return; // user moved on while loading
+    if (currentWord()?.id !== card.id) return;   // user moved on while loading
 
     if (!options.length || !card.translation) {
         box.innerHTML = '';
@@ -517,8 +711,8 @@ async function buildQuiz(card) {
 }
 
 function answerQuiz(btn) {
-    if (btn.closest('.quiz-options').classList.contains('is-answered')) return;
     const box = $('quizOptions');
+    if (box.classList.contains('is-answered')) return;
     box.classList.add('is-answered');
 
     const correct = btn.dataset.correct === 'true';
@@ -533,7 +727,7 @@ function answerQuiz(btn) {
     }, correct ? 550 : 1400);
 }
 
-// ===================== TYPING MODE =====================
+// ===================== TYPING =====================
 function answerTyping() {
     const card = currentWord();
     if (!card) return;
@@ -567,7 +761,6 @@ const normalise = (s) => (s || '').toLowerCase().replace(/[\s.()"'’]/g, '').tr
  */
 function isAcceptableAnswer(guess, translation) {
     if (!guess) return false;
-
     const senses = (translation || '')
         .split(/[\/,;|]/)
         .flatMap((sense) => [sense, sense.replace(/\([^)]*\)/g, '')])
@@ -606,6 +799,7 @@ const debouncedStats = debounce(() => refreshStats(), 1200);
 async function refreshStats() {
     try {
         state.stats = await api.getStats();
+        applyPlanToUI();
         renderStudyStats();
         if (!$('statsView').hidden) renderStats();
         setConn(true);
@@ -646,15 +840,68 @@ function renderStats() {
     $('sReview').textContent = s.in_review ?? 0;
     $('sMastered').textContent = s.mastered ?? 0;
     $('sSuspended').textContent = s.suspended ?? 0;
-    $('sStreak').textContent = s.streak ?? 0;
+    $('sStreak').textContent = s.streak ?? '🔒';
     $('sToday').textContent = s.today ?? 0;
 
     $('dailyGoalInput').value = s.daily_goal ?? 20;
-    $('newPerDayInput').value = s.new_per_day ?? 20;
+    $('newPerDayInput').value = s.new_per_day_wanted ?? s.new_per_day ?? 20;
 
     renderLevelBars(s.by_level || {});
-    renderHeatmap(s.heatmap || {});
-    renderForecast(s.forecast || {});
+    if (s.heatmap) renderHeatmap(s.heatmap);
+    if (s.forecast) renderForecast(s.forecast);
+}
+
+const LEVEL_TOTALS = { A1: 751, A2: 751, B1: 767, B2: 727 };
+
+function renderLevelBars(byLevel) {
+    const box = $('levelBars');
+    const levels = allowedLevels();
+    box.innerHTML = '';
+    Object.entries(LEVEL_TOTALS).forEach(([level, total]) => {
+        const locked = Boolean(levels) && !levels.includes(level);
+        const done = byLevel[level] || 0;
+        const pct = done ? Math.max(1.5, Math.min(100, (done / total) * 100)) : 0;
+        const row = document.createElement('div');
+        row.className = 'level-bar' + (locked ? ' is-locked' : '');
+        row.innerHTML = `
+            <span class="level-bar-name">${level}${locked ? ' 🔒' : ''}</span>
+            <span class="level-bar-track"><span class="level-bar-fill" style="width:${pct.toFixed(2)}%"></span></span>
+            <span class="level-bar-value">${done}/${total}</span>`;
+        box.appendChild(row);
+    });
+}
+
+function renderHeatmap(map) {
+    const box = $('heatmap');
+    box.innerHTML = '';
+
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(start.getDate() - 363);
+    start.setDate(start.getDate() - start.getDay());   // align to Sunday
+
+    const frag = document.createDocumentFragment();
+    for (let week = 0; week < 53; week++) {
+        const col = document.createElement('div');
+        col.className = 'hm-week';
+        for (let day = 0; day < 7; day++) {
+            const d = new Date(start);
+            d.setDate(start.getDate() + week * 7 + day);
+            const cell = document.createElement('i');
+            if (d > today) {
+                cell.className = 'hm-future';
+            } else {
+                const key = isoDate(d);
+                const n = map[key] || 0;
+                cell.className = 'hm-' + (n === 0 ? 0 : n < 5 ? 1 : n < 15 ? 2 : n < 35 ? 3 : 4);
+                cell.title = `${key} · ${n} คำ`;
+            }
+            col.appendChild(cell);
+        }
+        frag.appendChild(col);
+    }
+    box.appendChild(frag);
+    box.scrollLeft = box.scrollWidth;   // a year is wider than the panel
 }
 
 /** Cards already scheduled for each of the next seven days. */
@@ -666,8 +913,7 @@ function renderForecast(forecast) {
     for (let offset = 0; offset < 7; offset++) {
         const day = new Date();
         day.setDate(day.getDate() + offset);
-        const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
-        // anything already overdue lands on today's bar
+        const key = isoDate(day);
         const count = offset === 0
             ? Object.entries(forecast).reduce((sum, [d, n]) => (d <= key ? sum + n : sum), 0)
             : (forecast[key] || 0);
@@ -691,57 +937,24 @@ function renderForecast(forecast) {
     });
 }
 
-// Oxford 3000 only reaches B2; anything else lands in "อื่นๆ".
-const LEVEL_TOTALS = { A1: 751, A2: 751, B1: 767, B2: 727 };
+async function renderBadges() {
+    const box = $('badgeGrid');
+    let badges = [];
+    try { badges = await api.getBadges(); }
+    catch { box.innerHTML = '<p class="empty-message">โหลดเหรียญตราไม่สำเร็จ</p>'; return; }
 
-function renderLevelBars(byLevel) {
-    const box = $('levelBars');
     box.innerHTML = '';
-    Object.entries(LEVEL_TOTALS).forEach(([level, total]) => {
-        const done = byLevel[level] || 0;
-        // 1 of 751 rounds to 0% and the bar vanishes; show a sliver instead
-        const pct = done ? Math.max(1.5, Math.min(100, (done / total) * 100)) : 0;
-        const row = document.createElement('div');
-        row.className = 'level-bar';
-        row.innerHTML = `
-            <span class="level-bar-name">${level}</span>
-            <span class="level-bar-track"><span class="level-bar-fill" style="width:${pct.toFixed(2)}%"></span></span>
-            <span class="level-bar-value">${done}/${total}</span>`;
-        box.appendChild(row);
+    badges.forEach((b) => {
+        const el = document.createElement('div');
+        el.className = 'badge' + (b.earned ? ' is-earned' : '');
+        el.title = `${b.detail} · ${b.value}/${b.threshold}`;
+        el.innerHTML = `
+            <span class="badge-icon">${b.icon}</span>
+            <span class="badge-name">${escapeHtml(b.name)}</span>
+            <span class="badge-progress"><span style="width:${Math.round(b.progress * 100)}%"></span></span>
+            <span class="badge-value">${b.value}/${b.threshold}</span>`;
+        box.appendChild(el);
     });
-}
-
-function renderHeatmap(map) {
-    const box = $('heatmap');
-    box.innerHTML = '';
-
-    const today = new Date();
-    const start = new Date(today);
-    start.setDate(start.getDate() - 363);
-    start.setDate(start.getDate() - start.getDay()); // align to Sunday
-
-    const frag = document.createDocumentFragment();
-    for (let week = 0; week < 53; week++) {
-        const col = document.createElement('div');
-        col.className = 'hm-week';
-        for (let day = 0; day < 7; day++) {
-            const d = new Date(start);
-            d.setDate(start.getDate() + week * 7 + day);
-            const cell = document.createElement('i');
-            if (d > today) {
-                cell.className = 'hm-future';
-            } else {
-                const key = d.toISOString().slice(0, 10);
-                const n = map[key] || 0;
-                cell.className = 'hm-' + (n === 0 ? 0 : n < 5 ? 1 : n < 15 ? 2 : n < 35 ? 3 : 4);
-                cell.title = `${key} · ${n} คำ`;
-            }
-            col.appendChild(cell);
-        }
-        frag.appendChild(col);
-    }
-    box.appendChild(frag);
-    box.scrollLeft = box.scrollWidth;   // a year is wider than the panel; show recent days
 }
 
 async function saveGoal() {
@@ -753,12 +966,10 @@ async function saveGoal() {
     }
     try {
         await api.saveSettings({ dailyGoal: goal, newPerDay });
-        if (state.stats) {
-            state.stats.daily_goal = goal;
-            state.stats.new_per_day = newPerDay;
-        }
-        renderStudyStats();
-        toast('บันทึกแล้ว');
+        await refreshStats();
+        toast(isPro() || newPerDay <= 10
+            ? 'บันทึกแล้ว'
+            : 'บันทึกแล้ว — บัญชีฟรียังจำกัดที่ 10 คำใหม่ต่อวัน');
     } catch (err) {
         toast('บันทึกไม่สำเร็จ: ' + err.message);
     }
@@ -788,6 +999,194 @@ async function changePassword() {
     }
 }
 
+async function saveUsername() {
+    const name = $('usernameInput').value.trim().toLowerCase();
+    try {
+        await api.setUsername(name);
+        state.account.username = name;
+        applyAccount();
+        toast('เปลี่ยนชื่อผู้ใช้แล้ว');
+    } catch (err) {
+        $('accountHint').textContent = '❌ ' + err.message;
+    }
+}
+
+async function saveEmail() {
+    const email = $('emailInput').value.trim();
+    if (!/\S+@\S+\.\S+/.test(email)) {
+        $('accountHint').textContent = 'กรอกอีเมลให้ถูกต้อง';
+        return;
+    }
+    try {
+        await api.changeEmail(email);
+        $('accountHint').textContent =
+            '📧 ส่งลิงก์ยืนยันไปที่อีเมลนั้นแล้ว — กดยืนยันเพื่อให้มีผล';
+    } catch (err) {
+        $('accountHint').textContent = '❌ ' + err.message;
+    }
+}
+
+// ===================== LEADERBOARD =====================
+async function renderLeaderboard() {
+    const box = $('rankBody');
+    box.innerHTML = '<p class="loading">กำลังโหลด...</p>';
+
+    let board;
+    try {
+        board = await api.getLeaderboard(state.rankMetric, 20);
+    } catch (err) {
+        box.innerHTML = `
+            <div class="pro-lock is-block">
+                <p>🔒 ${escapeHtml(err.message)}</p>
+                <button class="btn btn-pro" data-goto-pro>✨ ดูแพ็กเกจ</button>
+            </div>`;
+        box.querySelector('[data-goto-pro]')?.addEventListener('click', () => switchView('pro'));
+        return;
+    }
+
+    const unit = { week: 'ครั้ง', streak: 'วัน', mastered: 'คำ' }[board.metric] || '';
+    if (!board.top.length) {
+        box.innerHTML = '<p class="empty-message">ยังไม่มีใครขึ้นกระดาน เริ่มทบทวนวันนี้ได้เลย</p>';
+        return;
+    }
+
+    const rows = board.top.map((r) => `
+        <div class="rank-row${r.is_me ? ' is-me' : ''}">
+            <span class="rank-pos rank-${r.rank <= 3 ? r.rank : 'n'}">${r.rank}</span>
+            <span class="rank-name">${escapeHtml(r.username)}${r.is_me ? ' (คุณ)' : ''}</span>
+            <span class="rank-value">${r.value} ${unit}</span>
+        </div>`).join('');
+
+    const mine = board.me && !board.top.some((r) => r.is_me)
+        ? `<div class="rank-row is-me is-detached">
+             <span class="rank-pos rank-n">${board.me.rank}</span>
+             <span class="rank-name">คุณ</span>
+             <span class="rank-value">${board.me.value} ${unit}</span>
+           </div>` : '';
+
+    const hidden = board.listed === false
+        ? '<p class="field-hint">คุณซ่อนชื่อจากกระดานอยู่ — เปิดได้ที่แท็บสถิติ</p>' : '';
+
+    box.innerHTML = `<div class="rank-table">${rows}${mine}</div>${hidden}`;
+}
+
+// ===================== PRO / BILLING =====================
+async function renderPro() {
+    const status = $('proStatus');
+    const a = state.account;
+    status.textContent = a?.is_pro
+        ? `✅ คุณเป็นสมาชิก Pro ถึง ${formatDate(a.pro_until)}`
+        : 'ตอนนี้ใช้แพ็กเกจฟรีอยู่';
+
+    if (!state.billing) {
+        try { state.billing = await api.getBillingConfig(); }
+        catch { $('planGrid').innerHTML = '<p class="empty-message">โหลดแพ็กเกจไม่สำเร็จ</p>'; return; }
+    }
+
+    const cfg = state.billing;
+    if (!cfg.omise_public_key) {
+        $('planGrid').innerHTML = `<p class="empty-message">
+            ยังไม่ได้ตั้งค่าการชำระเงิน — เจ้าของระบบต้องใส่ Omise public key ก่อน</p>`;
+        show($('payPanel'), false);
+    } else {
+        $('planGrid').innerHTML = cfg.plans.map((p) => `
+            <button class="plan-card${state.selectedPlan === p.code ? ' is-selected' : ''}"
+                    data-code="${p.code}"
+                    data-note="${escapeHtml(p.label_th)} — ${baht(p.amount_satang)} บาท">
+                ${p.badge_th ? `<span class="plan-badge">${escapeHtml(p.badge_th)}</span>` : ''}
+                <span class="plan-name">${escapeHtml(p.label_th)}</span>
+                <span class="plan-price">฿${baht(p.amount_satang)}</span>
+                <span class="plan-per">≈ ฿${baht(Math.round(p.amount_satang / p.months))}/เดือน</span>
+            </button>`).join('');
+        if (!cfg.live) {
+            $('planGrid').insertAdjacentHTML('afterend',
+                '<p class="field-hint">⚠️ โหมดทดสอบ — ยังไม่ตัดเงินจริง</p>');
+        }
+    }
+
+    renderBillingHistory();
+}
+
+async function renderBillingHistory() {
+    const box = $('billingHistory');
+    let rows = [];
+    try { rows = await api.getBillingHistory(); } catch { /* keep it quiet */ }
+
+    if (!rows.length) {
+        box.innerHTML = '<p class="empty-message">ยังไม่มีรายการ</p>';
+        return;
+    }
+    box.innerHTML = rows.map((r) => `
+        <div class="word-row">
+            <div class="word-row-main">
+                <strong>฿${baht(r.amount_satang)} · ${r.months} เดือน</strong>
+                <span class="translation-small">${formatDate(r.created_at)} · ${escapeHtml(r.method || '')}</span>
+            </div>
+            <div class="word-row-meta">
+                <span class="status-badge status-mastered">สำเร็จ</span>
+            </div>
+        </div>`).join('');
+}
+
+async function pay() {
+    const err = $('payError');
+    show(err, false);
+
+    if (!state.selectedPlan) return toast('เลือกแพ็กเกจก่อน');
+    const btn = $('payBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ กำลังดำเนินการ...';
+
+    try {
+        let token;
+        if (state.payMethod === 'card') {
+            const omise = await api.loadOmise(state.billing.omise_public_key);
+            token = await api.tokenizeCard(omise, {
+                name: $('cardName').value.trim(),
+                number: $('cardNumber').value.replace(/\s/g, ''),
+                expiration_month: Number($('cardMonth').value),
+                expiration_year: Number($('cardYear').value),
+                security_code: $('cardCvc').value.trim()
+            });
+        }
+
+        const charge = await api.createCharge({
+            plan: state.selectedPlan, method: state.payMethod, token
+        });
+
+        if (charge.authorize_uri) {
+            // 3-D Secure: the bank takes over from here
+            window.location.href = charge.authorize_uri;
+            return;
+        }
+
+        if (charge.qr_image) {
+            $('qrImage').src = charge.qr_image;
+            show($('qrBox'), true);
+            $('qrStatus').textContent = 'กำลังรอการชำระเงิน…';
+        }
+
+        $('qrStatus').textContent = 'กำลังรอการชำระเงิน…';
+        const account = await api.waitForPro();
+        if (account) {
+            state.account = account;
+            applyAccount();
+            await refreshStats();
+            show($('qrBox'), false);
+            toast('🎉 เป็นสมาชิก Pro แล้ว');
+            renderPro();
+        } else {
+            $('qrStatus').textContent = 'ยังไม่ได้รับการชำระเงิน — ถ้าจ่ายแล้วให้รอสักครู่หรือรีเฟรช';
+        }
+    } catch (e) {
+        err.textContent = e.message;
+        show(err, true);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'ดำเนินการชำระเงิน';
+    }
+}
+
 // ===================== BROWSE =====================
 async function runSearch() {
     const box = $('browseResults');
@@ -799,7 +1198,7 @@ async function runSearch() {
     try {
         rows = await api.searchWords(query, levels);
     } catch (err) {
-        box.innerHTML = `<p class="empty-message">ค้นหาไม่สำเร็จ: ${err.message}</p>`;
+        box.innerHTML = `<p class="empty-message">ค้นหาไม่สำเร็จ: ${escapeHtml(err.message)}</p>`;
         return;
     }
 
@@ -808,23 +1207,23 @@ async function runSearch() {
         return;
     }
 
-    const frag = document.createDocumentFragment();
-    rows.forEach((row) => {
-        const item = document.createElement('div');
-        item.className = 'word-row';
-        item.innerHTML = `
+    const allowed = allowedLevels();
+    box.innerHTML = rows.map((row) => {
+        const locked = Boolean(allowed) && row.level && !allowed.includes(row.level);
+        return `
+        <div class="word-row${locked ? ' is-locked' : ''}">
             <div class="word-row-main">
                 <strong>${escapeHtml(row.word)}</strong>
                 <span class="translation-small">${escapeHtml(row.translation || '—')}</span>
+                ${row.example_en ? `<span class="translation-small example-en">${escapeHtml(row.example_en)}</span>` : ''}
             </div>
             <div class="word-row-meta">
                 ${row.level ? `<span class="level-tag">${row.level}</span>` : ''}
                 <span class="status-badge status-${row.status}">${STATUS_TH[row.status] || row.status}</span>
-            </div>`;
-        frag.appendChild(item);
-    });
-    box.innerHTML = '';
-    box.appendChild(frag);
+                ${locked ? '<span class="status-badge">🔒 Pro</span>' : ''}
+            </div>
+        </div>`;
+    }).join('');
 }
 
 const STATUS_TH = {
@@ -849,7 +1248,7 @@ async function renderSuspended() {
     try {
         words = await api.getSuspendedWords($('hiddenSearch').value.trim());
     } catch (err) {
-        box.innerHTML = `<p class="empty-message">โหลดไม่สำเร็จ: ${err.message}</p>`;
+        box.innerHTML = `<p class="empty-message">โหลดไม่สำเร็จ: ${escapeHtml(err.message)}</p>`;
         return;
     }
 
@@ -858,44 +1257,33 @@ async function renderSuspended() {
         return;
     }
 
-    const frag = document.createDocumentFragment();
-    const badge = document.createElement('div');
-    badge.className = 'learned-count-badge';
-    badge.innerHTML = `<span class="count-icon">🎯</span>
-        <span class="count-text">จำได้แล้ว</span>
-        <span class="count-number">${words.length}</span>`;
-    frag.appendChild(badge);
-
-    const list = document.createElement('div');
-    list.className = 'hidden-words-list';
-    words.forEach((w) => {
-        const item = document.createElement('div');
-        item.className = 'hidden-word-item';
-        item.dataset.wordId = w.id;
-        item.innerHTML = `
-            <div class="word-info">
-                <strong>${escapeHtml(w.word)}</strong>
-                <span class="translation-small">${escapeHtml(w.translation || '—')}</span>
-            </div>
-            <button class="btn btn-unhide" data-word-id="${w.id}">ยกเลิกการจำ</button>`;
-        list.appendChild(item);
-    });
-    frag.appendChild(list);
-
-    box.innerHTML = '';
-    box.appendChild(frag);
+    box.innerHTML = `
+        <div class="learned-count-badge">
+            <span class="count-icon">🎯</span>
+            <span class="count-text">จำได้แล้ว</span>
+            <span class="count-number">${words.length}</span>
+        </div>
+        <div class="hidden-words-list">
+            ${words.map((w) => `
+                <div class="hidden-word-item" data-word-id="${w.id}">
+                    <div class="word-info">
+                        <strong>${escapeHtml(w.word)}</strong>
+                        <span class="translation-small">${escapeHtml(w.translation || '—')}</span>
+                    </div>
+                    <button class="btn btn-unhide" data-word-id="${w.id}">ยกเลิกการจำ</button>
+                </div>`).join('')}
+        </div>`;
 }
 
 async function unsuspend(wordId) {
     try {
         await api.setSuspended(wordId, false);
-        const item = $('hiddenWordsList').querySelector(`.hidden-word-item[data-word-id="${wordId}"]`);
-        if (item) item.remove();
+        $('hiddenWordsList').querySelector(`.hidden-word-item[data-word-id="${wordId}"]`)?.remove();
         if (state.stats && state.stats.suspended > 0) state.stats.suspended--;
         renderStudyStats();
 
-        const badge = document.querySelector('.learned-count-badge .count-number');
         const left = $('hiddenWordsList').querySelectorAll('.hidden-word-item').length;
+        const badge = document.querySelector('.learned-count-badge .count-number');
         if (badge) badge.textContent = left;
         if (!left) $('hiddenWordsList').innerHTML = '<p class="empty-message">ไม่มีคำในรายการนี้</p>';
     } catch (err) {
@@ -938,9 +1326,7 @@ function setConn(ok) {
     const el = $('connStatus');
     const pending = api.outboxSize();
     el.className = ok ? 'conn-ok' : 'conn-off';
-    el.textContent = ok
-        ? 'เชื่อมต่อแล้ว'
-        : `ออฟไลน์${pending ? ` · ค้างส่ง ${pending}` : ''}`;
+    el.textContent = ok ? 'เชื่อมต่อแล้ว' : `ออฟไลน์${pending ? ` · ค้างส่ง ${pending}` : ''}`;
 }
 
 let toastTimer = null;
@@ -968,6 +1354,15 @@ function shuffle(array) {
     }
     return arr;
 }
+
+const isoDate = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const baht = (satang) => (satang / 100).toLocaleString('th-TH', { maximumFractionDigits: 0 });
+
+const formatDate = (iso) => iso
+    ? new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '-';
 
 function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, (c) =>

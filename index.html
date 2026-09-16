@@ -8,34 +8,80 @@
     <title>Oxford 3000 Flashcards</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="word-meta-styles.css">
-    <link rel="stylesheet" href="app-styles.css">
+    <link rel="stylesheet" href="styles.css?v=dev">
+    <link rel="stylesheet" href="word-meta-styles.css?v=dev">
+    <link rel="stylesheet" href="app-styles.css?v=dev">
 </head>
 <body>
-    <!-- ===================== LOGIN ===================== -->
+    <!-- ===================== AUTH ===================== -->
     <div id="loginScreen" class="login-screen">
         <div class="login-container">
             <div class="login-header">
                 <h1>🎓 Oxford 3000</h1>
                 <p>Flashcards</p>
             </div>
-            <div class="login-form">
-                <h2 id="authTitle">เข้าสู่ระบบ</h2>
+
+            <div class="auth-tabs" id="authTabs">
+                <button class="auth-tab is-active" data-mode="signin">เข้าสู่ระบบ</button>
+                <button class="auth-tab" data-mode="signup">สมัครสมาชิก</button>
+            </div>
+
+            <div class="login-form" id="authForm">
                 <div class="input-group">
-                    <label for="username">👤 ชื่อผู้ใช้</label>
-                    <input type="text" id="username" autocomplete="username" placeholder="กรอกชื่อผู้ใช้">
+                    <label for="identifier" id="identifierLabel">📧 อีเมล</label>
+                    <input type="email" id="identifier" autocomplete="username"
+                           placeholder="you@example.com">
+                    <p class="field-hint" id="identifierHint">บัญชีเดิมใช้ชื่อผู้ใช้ก็ได้</p>
                 </div>
+
+                <div class="input-group" id="usernameGroup" hidden>
+                    <label for="signupUsername">👤 ชื่อผู้ใช้</label>
+                    <input type="text" id="signupUsername" autocomplete="nickname"
+                           placeholder="a-z, 0-9, _ (3-32 ตัว)">
+                    <p class="field-hint" id="usernameHint">ใช้แสดงบนกระดานจัดอันดับ</p>
+                </div>
+
                 <div class="input-group">
                     <label for="password">🔒 รหัสผ่าน</label>
-                    <input type="password" id="password" autocomplete="current-password" placeholder="กรอกรหัสผ่าน">
+                    <input type="password" id="password" autocomplete="current-password"
+                           placeholder="อย่างน้อย 8 ตัวอักษร">
                 </div>
+
                 <p class="auth-error" id="authError" hidden></p>
-                <button id="loginBtn" class="btn btn-primary btn-large">🚀 เข้าสู่ระบบ</button>
+                <p class="auth-notice" id="authNotice" hidden></p>
+
+                <button id="submitAuthBtn" class="btn btn-primary btn-large">🚀 เข้าสู่ระบบ</button>
+
+                <div class="auth-divider"><span>หรือ</span></div>
+                <button id="googleBtn" class="btn btn-google btn-large">
+                    <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+                        <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.660v3h3.9c2.3-2.1 3.5-5.2 3.5-8.86z"/>
+                        <path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.9-3a7.2 7.2 0 0 1-10.7-3.8h-4v3.1A12 12 0 0 0 12 24z"/>
+                        <path fill="#FBBC05" d="M5.3 14.3a7.1 7.1 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/>
+                        <path fill="#EA4335" d="M12 4.8c1.8 0 3.4.6 4.6 1.8l3.5-3.5A12 12 0 0 0 1.3 6.6l4 3.1A7.2 7.2 0 0 1 12 4.8z"/>
+                    </svg>
+                    เข้าสู่ระบบด้วย Google
+                </button>
+
                 <p class="login-hint">
-                    <span id="authSwitchText">ยังไม่มีบัญชี?</span>
-                    <button type="button" class="link-btn" id="authSwitchBtn">สมัครสมาชิก</button>
+                    <button type="button" class="link-btn" id="forgotBtn">ลืมรหัสผ่าน?</button>
                 </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- password recovery, reached from the emailed link -->
+    <div id="resetScreen" class="login-screen" hidden>
+        <div class="login-container">
+            <div class="login-header"><h1>🔑 ตั้งรหัสผ่านใหม่</h1></div>
+            <div class="login-form">
+                <div class="input-group">
+                    <label for="resetPassword">รหัสผ่านใหม่</label>
+                    <input type="password" id="resetPassword" autocomplete="new-password"
+                           placeholder="อย่างน้อย 8 ตัวอักษร">
+                </div>
+                <p class="auth-error" id="resetError" hidden></p>
+                <button id="resetSubmitBtn" class="btn btn-primary btn-large">บันทึกรหัสผ่านใหม่</button>
             </div>
         </div>
     </div>
@@ -49,20 +95,27 @@
                     <p class="subtitle">เรียนรู้คำศัพท์อย่างง่ายดาย</p>
                 </div>
                 <div class="header-actions">
+                    <span class="plan-pill" id="planPill" hidden>PRO</span>
                     <button id="viewHiddenBtn" class="btn btn-view-hidden">🎯 คำที่จำได้แล้ว</button>
                     <button id="logoutBtn" class="btn btn-logout">👋 ออกจากระบบ</button>
                 </div>
             </div>
         </header>
 
-        <!-- Tabs -->
+        <div class="banner" id="emailBanner" hidden>
+            <span>บัญชีนี้ยังไม่มีอีเมลจริง — ถ้าลืมรหัสผ่านจะกู้คืนไม่ได้</span>
+            <button class="btn btn-secondary" id="bannerAddEmail">เพิ่มอีเมล</button>
+        </div>
+
         <nav class="tabs" role="tablist">
             <button class="tab is-active" data-view="study" role="tab">📖 ทบทวน</button>
             <button class="tab" data-view="browse" role="tab">🔍 ค้นหาคำ</button>
             <button class="tab" data-view="stats" role="tab">📊 สถิติ</button>
+            <button class="tab" data-view="rank" role="tab">🏆 อันดับ</button>
+            <button class="tab tab-pro" data-view="pro" role="tab">✨ Pro</button>
         </nav>
 
-        <!-- ============ STUDY VIEW ============ -->
+        <!-- ============ STUDY ============ -->
         <div id="studyView" class="view">
             <section class="stats">
                 <div class="stat-item">
@@ -77,19 +130,17 @@
                     <span class="stat-label">🎯 จำได้แล้ว</span>
                     <span class="stat-value" id="hiddenWordsCount">0</span>
                 </div>
-                <div class="stat-item">
+                <div class="stat-item" id="streakTile">
                     <span class="stat-label">🔥 ต่อเนื่อง</span>
                     <span class="stat-value" id="streakCount">0</span>
                 </div>
             </section>
 
-            <!-- daily goal -->
             <div class="goal-bar" id="goalBar">
                 <div class="goal-bar-track"><div class="goal-bar-fill" id="goalFill"></div></div>
                 <span class="goal-bar-text" id="goalText">วันนี้ 0 / 20 คำ</span>
             </div>
 
-            <!-- filters -->
             <section class="filters" id="filters">
                 <div class="filter-row">
                     <span class="filter-label">ระดับ</span>
@@ -114,7 +165,6 @@
                 </div>
             </section>
 
-            <!-- flashcard -->
             <section class="flashcard-container" id="flashcardContainer">
                 <div class="flashcard" id="flashcard">
                     <div class="card-front">
@@ -127,7 +177,6 @@
                         <p class="card-schedule" id="cardSchedule"></p>
                     </div>
 
-                    <!-- flip mode: translation toggle -->
                     <div class="translation-section" id="flipControls">
                         <label class="switch">
                             <input type="checkbox" id="showTranslationToggle">
@@ -152,10 +201,8 @@
                         </div>
                     </div>
 
-                    <!-- quiz mode -->
                     <div class="quiz-options" id="quizOptions" hidden></div>
 
-                    <!-- typing mode -->
                     <div class="typing-box" id="typingBox" hidden>
                         <input type="text" id="typingInput" class="select-input"
                                placeholder="พิมพ์คำแปลภาษาไทย แล้วกด Enter" autocomplete="off">
@@ -167,10 +214,10 @@
                     <p>🎉</p>
                     <p id="emptyTitle">ทบทวนครบแล้ววันนี้!</p>
                     <p id="emptySub">กลับมาใหม่เมื่อถึงรอบทบทวนถัดไป</p>
+                    <button class="btn btn-pro" id="emptyUpgradeBtn" hidden>✨ อัปเกรดเป็น Pro</button>
                 </div>
             </section>
 
-            <!-- actions -->
             <section class="actions">
                 <button id="startBtn" class="btn btn-primary btn-large">🚀 เริ่มทบทวน</button>
 
@@ -198,7 +245,7 @@
             </section>
         </div>
 
-        <!-- ============ BROWSE VIEW ============ -->
+        <!-- ============ BROWSE ============ -->
         <div id="browseView" class="view" hidden>
             <section class="filters">
                 <div class="filter-row">
@@ -218,7 +265,7 @@
             <div id="browseResults" class="word-table"></div>
         </div>
 
-        <!-- ============ STATS VIEW ============ -->
+        <!-- ============ STATS ============ -->
         <div id="statsView" class="view" hidden>
             <section class="stats stats-grid">
                 <div class="stat-item"><span class="stat-label">📖 กำลังเรียน</span><span class="stat-value" id="sLearning">0</span></div>
@@ -235,14 +282,27 @@
             </section>
 
             <section class="panel">
+                <h3 class="panel-title">เหรียญตรา</h3>
+                <div id="badgeGrid" class="badge-grid"></div>
+            </section>
+
+            <section class="panel" id="forecastPanel">
+                <h3 class="panel-title">คิวทบทวน 7 วันข้างหน้า</h3>
+                <div id="forecastBars" class="forecast"></div>
+                <div class="pro-lock" id="forecastLock" hidden>
+                    <p>🔒 ดูคิวล่วงหน้าได้เมื่อเป็น Pro</p>
+                    <button class="btn btn-pro" data-goto-pro>✨ ดูแพ็กเกจ</button>
+                </div>
+            </section>
+
+            <section class="panel" id="heatmapPanel">
                 <h3 class="panel-title">ทบทวนย้อนหลัง 1 ปี</h3>
                 <div id="heatmap" class="heatmap"></div>
                 <p class="heatmap-legend"><span>น้อย</span><i class="hm-0"></i><i class="hm-1"></i><i class="hm-2"></i><i class="hm-3"></i><i class="hm-4"></i><span>มาก</span></p>
-            </section>
-
-            <section class="panel">
-                <h3 class="panel-title">คิวทบทวน 7 วันข้างหน้า</h3>
-                <div id="forecastBars" class="forecast"></div>
+                <div class="pro-lock" id="heatmapLock" hidden>
+                    <p>🔒 กราฟย้อนหลังและสถิติต่อเนื่องเป็นของ Pro</p>
+                    <button class="btn btn-pro" data-goto-pro>✨ ดูแพ็กเกจ</button>
+                </div>
             </section>
 
             <section class="panel">
@@ -254,7 +314,27 @@
                     <input type="number" id="newPerDayInput" class="select-input" min="0" max="200" step="5">
                     <button class="btn btn-secondary" id="saveGoalBtn">บันทึก</button>
                 </div>
-                <p class="field-hint">“คำใหม่ต่อวัน” คือเพดานคำที่ยังไม่เคยเห็น กันไม่ให้กองทบทวนพอกจนตามไม่ทัน</p>
+                <p class="field-hint" id="newPerDayHint">“คำใหม่ต่อวัน” คือเพดานคำที่ยังไม่เคยเห็น กันไม่ให้กองทบทวนพอกจนตามไม่ทัน</p>
+                <div class="filter-row">
+                    <label class="switch-row">
+                        <input type="checkbox" id="leaderboardToggle">
+                        <span>แสดงชื่อผู้ใช้ของฉันบนกระดานจัดอันดับ</span>
+                    </label>
+                </div>
+            </section>
+
+            <section class="panel">
+                <h3 class="panel-title">บัญชี</h3>
+                <div class="account-rows" id="accountRows"></div>
+                <div class="filter-row">
+                    <input type="text" id="usernameInput" class="select-input" placeholder="ชื่อผู้ใช้">
+                    <button class="btn btn-secondary" id="saveUsernameBtn">เปลี่ยนชื่อผู้ใช้</button>
+                </div>
+                <div class="filter-row">
+                    <input type="email" id="emailInput" class="select-input" placeholder="อีเมล">
+                    <button class="btn btn-secondary" id="saveEmailBtn">เปลี่ยน/เพิ่มอีเมล</button>
+                </div>
+                <p class="field-hint" id="accountHint"></p>
             </section>
 
             <section class="panel">
@@ -267,6 +347,79 @@
                     <button class="btn btn-secondary" id="changePasswordBtn">เปลี่ยน</button>
                 </div>
                 <p class="field-hint" id="passwordHint"></p>
+            </section>
+        </div>
+
+        <!-- ============ LEADERBOARD ============ -->
+        <div id="rankView" class="view" hidden>
+            <section class="filters">
+                <div class="filter-row">
+                    <span class="filter-label">จัดอันดับตาม</span>
+                    <div class="chips" id="metricChips">
+                        <button class="chip is-active" data-metric="week">ทบทวน 7 วัน</button>
+                        <button class="chip" data-metric="streak">วันต่อเนื่อง</button>
+                        <button class="chip" data-metric="mastered">คำที่แม่นแล้ว</button>
+                    </div>
+                </div>
+            </section>
+            <div id="rankBody"></div>
+        </div>
+
+        <!-- ============ PRO ============ -->
+        <div id="proView" class="view" hidden>
+            <section class="panel pro-hero" id="proHero">
+                <h3 class="pro-hero-title">Oxford 3000 <span class="plan-pill">PRO</span></h3>
+                <ul class="pro-features">
+                    <li>📚 ครบทั้ง 3,015 คำ (ฟรีได้ A1–A2)</li>
+                    <li>♾️ ไม่จำกัดคำใหม่ต่อวัน (ฟรี 10 คำ)</li>
+                    <li>🎲 โหมดเลือก 4 ตัวเลือก และพิมพ์คำตอบ</li>
+                    <li>📊 กราฟย้อนหลัง 1 ปี · คิวล่วงหน้า · วันต่อเนื่อง</li>
+                    <li>🏆 กระดานจัดอันดับและเหรียญตรา</li>
+                </ul>
+                <p class="pro-status" id="proStatus"></p>
+            </section>
+
+            <section class="panel">
+                <h3 class="panel-title">เลือกแพ็กเกจ</h3>
+                <div class="plan-grid" id="planGrid"></div>
+            </section>
+
+            <section class="panel" id="payPanel" hidden>
+                <h3 class="panel-title">ชำระเงิน</h3>
+                <div class="filter-row">
+                    <div class="chips" id="payMethodChips">
+                        <button class="chip is-active" data-method="promptpay">PromptPay</button>
+                        <button class="chip" data-method="card">บัตรเครดิต/เดบิต</button>
+                    </div>
+                </div>
+
+                <div id="cardForm" hidden>
+                    <div class="filter-row">
+                        <input type="text" id="cardName" class="select-input" placeholder="ชื่อบนบัตร" autocomplete="cc-name">
+                        <input type="text" id="cardNumber" class="select-input" placeholder="หมายเลขบัตร" inputmode="numeric" autocomplete="cc-number">
+                    </div>
+                    <div class="filter-row">
+                        <input type="text" id="cardMonth" class="select-input card-small" placeholder="MM" inputmode="numeric" autocomplete="cc-exp-month">
+                        <input type="text" id="cardYear" class="select-input card-small" placeholder="YYYY" inputmode="numeric" autocomplete="cc-exp-year">
+                        <input type="text" id="cardCvc" class="select-input card-small" placeholder="CVC" inputmode="numeric" autocomplete="cc-csc">
+                    </div>
+                    <p class="field-hint">ข้อมูลบัตรส่งตรงจากเบราว์เซอร์ไป Omise ไม่ผ่านเซิร์ฟเวอร์ของเรา</p>
+                </div>
+
+                <p class="field-hint" id="payNote"></p>
+                <button class="btn btn-pro btn-large" id="payBtn">ดำเนินการชำระเงิน</button>
+                <p class="auth-error" id="payError" hidden></p>
+
+                <div class="qr-box" id="qrBox" hidden>
+                    <p class="qr-title">สแกนด้วยแอปธนาคารเพื่อจ่ายด้วย PromptPay</p>
+                    <img id="qrImage" alt="PromptPay QR" class="qr-image">
+                    <p class="qr-status" id="qrStatus">กำลังรอการชำระเงิน…</p>
+                </div>
+            </section>
+
+            <section class="panel">
+                <h3 class="panel-title">ประวัติการชำระเงิน</h3>
+                <div id="billingHistory" class="word-table"></div>
             </section>
         </div>
 
@@ -293,6 +446,6 @@
 
     <div id="toast" class="toast" hidden></div>
 
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app.js?v=dev"></script>
 </body>
 </html>

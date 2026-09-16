@@ -27,6 +27,9 @@ What it does:
 - **Pronunciation** — a Thai phonetic respelling on the card, plus the browser's own speech synthesis; no audio files, no API.
 - **Stats** — a daily goal bar, a review streak, a year-long heatmap, a seven-day forecast of what is coming, and progress per CEFR level.
 - **Filters and search** — study only A1, or only verbs; search all 3,015 words in English or Thai.
+- **Free and Pro** — Pro opens B1/B2, lifts the new-card cap, adds the quiz and typing modes, the full stats, and the leaderboard. The limits are enforced in SQL, not by hiding buttons.
+- **Leaderboard and badges** — rank by reviews this week, streak, or words mastered; eleven badges track the long haul.
+- **Sign in with an email address or Google**, with password reset. Accounts from the spreadsheet still sign in by username until they add an email.
 - **Per-user progress, enforced by the database** — row level security means a user's card states and review log are unreadable to anyone else, even with the browser key in hand.
 - **Installable and offline-tolerant** — a PWA, and reviews you make with no connection are queued and replayed when it comes back.
 - **No framework, no build step** — plain ES modules, works as a static site.
@@ -60,12 +63,19 @@ Scheduling, queue building and stats all run **inside the database**, so one scr
 | `get_quiz_options(word_id)` | three same-level distractors that do not share the answer's meaning |
 | `register_user(username, password)` | sign-up by username (see *Auth* below) |
 | `change_password(current, new)` | verifies the old password and rehashes the new one |
+| `get_leaderboard(metric, limit)` | Pro only; ranks people who left themselves listed |
+| `get_my_badges()` | eleven badges with progress towards each |
+| `get_billing_config()` | prices and the Omise publishable key, for the upgrade screen |
+
+Entitlement helpers (`is_pro`, `plan_of`, `user_metrics`) live in the `app_private` schema. PostgREST only exposes `public`, so they are reachable from the functions that need them and from nowhere else — `user_metrics(uuid)` would otherwise have let anyone with the browser key read any account's streak.
 
 Files:
 
 - **`api.js`** — every call to Supabase, plus the offline outbox.
 - **`app.js`** — views, the study loop, keyboard shortcuts, speech.
-- **`supabase/migrations/`** — the whole schema, the SM-2 implementation and the RLS policies.
+- **`supabase/migrations/`** — the whole schema, the SM-2 implementation, the plan limits and the RLS policies.
+- **`supabase/functions/`** — the two Edge Functions that talk to Omise.
+- **[SETUP_BILLING.md](SETUP_BILLING.md)** — the keys and dashboard switches the owner has to set.
 - **`supabase/seed/`** — the 3,015-word catalogue as JSON.
 
 ## Live
@@ -92,9 +102,17 @@ The publishable key is *meant* to be in the browser — RLS is what protects the
 
 ## Auth
 
-Sign-in is by username, which Supabase Auth cannot do directly — it wants an email. Accounts therefore use a synthetic `<username>@oxford3000.local` address, and sign-up goes through the `register_user` database function rather than `auth.signUp`, because GoTrue rejects that domain and, on the free tier, would try to send a confirmation mail capped at about two an hour.
+New accounts are ordinary Supabase Auth: a real email address, or Google. That matters for more than tidiness — password reset and payment receipts both need somewhere a person actually reads.
 
-That function is `security definer` and writes to `auth.users` itself. It validates the username and password and caps the project at 500 accounts, but it is still the one place in this app where an unauthenticated caller writes to an auth table — worth reading before you deploy it somewhere that matters. Swap it for ordinary email sign-up if you would rather not have it.
+The four accounts inherited from the spreadsheet have no email, so they keep signing in by username through `legacy_login_email`, which resolves a name to its address **only while that address is still the synthetic `@oxford3000.local` one**. The moment a real email is attached the lookup stops answering, so it can never be used to discover somebody's real address. Those accounts see a banner asking them to add one.
+
+An earlier version let anyone create an account through a `security definer` function that wrote to `auth.users` directly. That is gone.
+
+## Billing
+
+Omise, because the audience is Thai and PromptPay matters. Pro is stored as an expiry date rather than a subscription state machine: Omise can only auto-renew a saved card, PromptPay is one-time, and both end up doing the same thing — a successful charge pushes `pro_until` further out. A failed renewal degrades to Free on its own.
+
+The browser never names a price; `create-charge` reads it from `billing_plans`. The webhook never trusts its payload; it re-fetches the charge from Omise with the secret key and decides from that, so a forged POST buys nothing. A replayed one buys nothing either — `billing_events.charge_id` is unique and claiming it is what gates the grant.
 
 ## Notes
 
