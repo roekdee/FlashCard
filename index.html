@@ -145,6 +145,11 @@
                             <strong>💬 Meaning:</strong>
                             <p id="translationText">-</p>
                         </div>
+                        <div class="translation example-block" id="exampleBlock" hidden>
+                            <strong>📝 Example:</strong>
+                            <p class="example-en" id="exampleEn">-</p>
+                            <p class="example-th" id="exampleTh">-</p>
+                        </div>
                     </div>
 
                     <!-- quiz mode -->
@@ -187,6 +192,7 @@
                     <div class="secondary-row">
                         <button id="hideBtn" class="btn btn-success">🎯 จำได้แล้ว ไม่ต้องถามอีก</button>
                         <button id="skipBtn" class="btn btn-secondary">➡️ ข้าม</button>
+                        <button id="undoBtn" class="btn btn-secondary" disabled>↩️ ย้อนคำตอบล่าสุด</button>
                     </div>
                 </div>
             </section>
@@ -235,12 +241,32 @@
             </section>
 
             <section class="panel">
-                <h3 class="panel-title">ตั้งค่า</h3>
+                <h3 class="panel-title">คิวทบทวน 7 วันข้างหน้า</h3>
+                <div id="forecastBars" class="forecast"></div>
+            </section>
+
+            <section class="panel">
+                <h3 class="panel-title">ตั้งค่าการเรียน</h3>
                 <div class="filter-row">
                     <span class="filter-label">เป้าหมายต่อวัน</span>
                     <input type="number" id="dailyGoalInput" class="select-input" min="1" max="500" step="5">
+                    <span class="filter-label">คำใหม่ต่อวัน</span>
+                    <input type="number" id="newPerDayInput" class="select-input" min="0" max="200" step="5">
                     <button class="btn btn-secondary" id="saveGoalBtn">บันทึก</button>
                 </div>
+                <p class="field-hint">“คำใหม่ต่อวัน” คือเพดานคำที่ยังไม่เคยเห็น กันไม่ให้กองทบทวนพอกจนตามไม่ทัน</p>
+            </section>
+
+            <section class="panel">
+                <h3 class="panel-title">เปลี่ยนรหัสผ่าน</h3>
+                <div class="filter-row">
+                    <input type="password" id="currentPassword" class="select-input"
+                           placeholder="รหัสผ่านเดิม" autocomplete="current-password">
+                    <input type="password" id="newPassword" class="select-input"
+                           placeholder="รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)" autocomplete="new-password">
+                    <button class="btn btn-secondary" id="changePasswordBtn">เปลี่ยน</button>
+                </div>
+                <p class="field-hint" id="passwordHint"></p>
             </section>
         </div>
 

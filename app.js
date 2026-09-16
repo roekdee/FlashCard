@@ -126,7 +126,8 @@ async function enterApp() {
     const [profile] = await Promise.all([api.getProfile(), refreshStats(), loadPosOptions()]);
     state.profile = profile;
     $('currentUsername').textContent = profile?.username || '-';
-    $('dailyGoalInput').value = profile?.daily_goal || 20;
+    $('dailyGoalInput').value = profile?.daily_goal ?? 20;
+    $('newPerDayInput').value = profile?.new_per_day ?? 20;
 
     api.flushOutbox().then((n) => { if (n) refreshStats(); });
 }
@@ -148,6 +149,8 @@ function bindAppUI() {
 
     $('startBtn').addEventListener('click', startSession);
     $('skipBtn').addEventListener('click', skipCard);
+    $('undoBtn').addEventListener('click', undoLast);
+    $('changePasswordBtn').addEventListener('click', changePassword);
     $('hideBtn').addEventListener('click', suspendCurrent);
     $('speakBtn').addEventListener('click', () => speak(currentWord()?.word));
     $('showTranslationToggle').addEventListener('change', (e) => reveal(e.target.checked));
@@ -213,6 +216,7 @@ function onKey(e) {
     if (e.key === ' ') { e.preventDefault(); reveal(!state.revealed); }
     else if (e.key.toLowerCase() === 's') speak(currentWord()?.word);
     else if (e.key.toLowerCase() === 'n') skipCard();
+    else if (e.key.toLowerCase() === 'z' && !$('undoBtn').disabled) undoLast();
     else if (['1', '2', '3', '4'].includes(e.key) && state.mode === 'flip' && state.revealed) {
         grade([1, 3, 4, 5][Number(e.key) - 1]);
     }
@@ -314,6 +318,14 @@ function showCard() {
     setTag($('levelTag'), card.level);
     $('pronunciationText').textContent = card.pronunciation || '—';
     $('translationText').textContent = card.translation || '—';
+
+    const hasExample = Boolean(card.example_en);
+    show($('exampleBlock'), hasExample);
+    if (hasExample) {
+        $('exampleEn').textContent = card.example_en;
+        $('exampleTh').textContent = card.example_th || '';
+    }
+
     $('cardSchedule').textContent = card.is_new
         ? '✨ คำใหม่'
         : `ทบทวนครั้งที่ ${card.repetitions} · ช่วงห่าง ${card.interval_days} วัน`;
@@ -362,6 +374,7 @@ async function grade(value) {
     try {
         await api.reviewCardResilient(wordId, value, state.mode);
         bumpToday();
+        $('undoBtn').disabled = false;   // only a stored review can be undone
     } catch {
         setConn(false);
         toast('ออฟไลน์ — เก็บผลไว้ส่งทีหลังแล้ว');
@@ -369,6 +382,29 @@ async function grade(value) {
         state.answering = false;
     }
     debouncedStats();
+}
+
+/** Put the last answer back — the card returns to the front of the session. */
+async function undoLast() {
+    const btn = $('undoBtn');
+    btn.disabled = true;
+    try {
+        const result = await api.undoLastReview();
+        if (!result?.ok) return toast(result?.error || 'ย้อนกลับไม่สำเร็จ');
+
+        toast(`ย้อน "${result.word}" กลับแล้ว`);
+        await reloadQueue();
+
+        // bring the restored word back to the top of the deck
+        const index = state.queue.findIndex((card) => card.id === result.word_id);
+        if (index > -1) {
+            state.index = index;
+            showCard();
+        }
+    } catch (err) {
+        toast('ย้อนกลับไม่สำเร็จ: ' + err.message);
+        btn.disabled = false;
+    }
 }
 
 /** Drop the current card from the session — it has been answered. */
@@ -486,8 +522,7 @@ function answerTyping() {
     const guess = normalise(input.value);
     if (!guess) return;
 
-    const answers = (card.translation || '').split(/[\/,;|]/).map(normalise).filter(Boolean);
-    const correct = answers.some((a) => a === guess || (a.length > 3 && a.includes(guess)));
+    const correct = isAcceptableAnswer(guess, card.translation);
 
     $('typingFeedback').textContent = correct
         ? '✅ ถูกต้อง'
@@ -502,6 +537,28 @@ function answerTyping() {
 }
 
 const normalise = (s) => (s || '').toLowerCase().replace(/[\s.()"'’]/g, '').trim();
+
+/**
+ * Accept a typed answer against a gloss like "ปิด (ทำให้สนิท) / งับ".
+ *
+ * The old rule was `sense.includes(guess)` for any sense over three characters,
+ * which passed a single Thai letter as a correct answer and fed SM-2 a lie.
+ * Now a sense matches on equality, or on a near-complete prefix — enough to
+ * forgive a dropped final syllable, not enough to guess.
+ */
+function isAcceptableAnswer(guess, translation) {
+    if (!guess) return false;
+
+    const senses = (translation || '')
+        .split(/[\/,;|]/)
+        .flatMap((sense) => [sense, sense.replace(/\([^)]*\)/g, '')])
+        .map(normalise)
+        .filter(Boolean);
+
+    return senses.some((sense) =>
+        sense === guess ||
+        (guess.length >= 4 && sense.startsWith(guess) && guess.length / sense.length >= 0.7));
+}
 
 // ===================== SM-2 PREVIEW =====================
 // Mirrors public.sm2_next in supabase/migrations/0002_sm2_rpc.sql — display only.
@@ -555,7 +612,12 @@ function renderStudyStats() {
     const goal = s.daily_goal || 20;
     const done = s.today || 0;
     $('goalFill').style.width = Math.min(100, (done / goal) * 100) + '%';
-    $('goalText').textContent = `วันนี้ ${done} / ${goal} คำ` + (done >= goal ? ' 🎉' : '');
+
+    const cap = s.new_per_day ?? 20;
+    const newToday = s.new_today ?? 0;
+    const newLeft = Math.max(0, cap - newToday);
+    $('goalText').textContent =
+        `วันนี้ ${done} / ${goal} คำ${done >= goal ? ' 🎉' : ''} · คำใหม่เหลือ ${newLeft}/${cap}`;
 }
 
 function renderStats() {
@@ -568,8 +630,46 @@ function renderStats() {
     $('sStreak').textContent = s.streak ?? 0;
     $('sToday').textContent = s.today ?? 0;
 
+    $('dailyGoalInput').value = s.daily_goal ?? 20;
+    $('newPerDayInput').value = s.new_per_day ?? 20;
+
     renderLevelBars(s.by_level || {});
     renderHeatmap(s.heatmap || {});
+    renderForecast(s.forecast || {});
+}
+
+/** Cards already scheduled for each of the next seven days. */
+function renderForecast(forecast) {
+    const box = $('forecastBars');
+    box.innerHTML = '';
+
+    const days = [];
+    for (let offset = 0; offset < 7; offset++) {
+        const day = new Date();
+        day.setDate(day.getDate() + offset);
+        const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+        // anything already overdue lands on today's bar
+        const count = offset === 0
+            ? Object.entries(forecast).reduce((sum, [d, n]) => (d <= key ? sum + n : sum), 0)
+            : (forecast[key] || 0);
+        days.push({ key, offset, count });
+    }
+
+    const peak = Math.max(1, ...days.map((d) => d.count));
+    const labels = ['วันนี้', 'พรุ่งนี้', 'อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+
+    days.forEach(({ offset, count, key }) => {
+        const date = new Date(key + 'T00:00:00');
+        const label = offset < 2 ? labels[offset] : labels[2 + date.getDay()];
+        const bar = document.createElement('div');
+        bar.className = 'forecast-day';
+        bar.innerHTML = `
+            <span class="forecast-count">${count}</span>
+            <span class="forecast-bar" style="height:${Math.round((count / peak) * 100)}%"></span>
+            <span class="forecast-label">${label}</span>`;
+        bar.title = `${key} · ${count} คำ`;
+        box.appendChild(bar);
+    });
 }
 
 // Oxford 3000 only reaches B2; anything else lands in "อื่นๆ".
@@ -627,14 +727,45 @@ function renderHeatmap(map) {
 
 async function saveGoal() {
     const goal = Number($('dailyGoalInput').value);
+    const newPerDay = Number($('newPerDayInput').value);
     if (!goal || goal < 1 || goal > 500) return toast('เป้าหมายต้องอยู่ระหว่าง 1–500');
+    if (!Number.isFinite(newPerDay) || newPerDay < 0 || newPerDay > 200) {
+        return toast('คำใหม่ต่อวันต้องอยู่ระหว่าง 0–200');
+    }
     try {
-        await api.saveDailyGoal(goal);
-        if (state.stats) state.stats.daily_goal = goal;
+        await api.saveSettings({ dailyGoal: goal, newPerDay });
+        if (state.stats) {
+            state.stats.daily_goal = goal;
+            state.stats.new_per_day = newPerDay;
+        }
         renderStudyStats();
-        toast('บันทึกเป้าหมายแล้ว');
+        toast('บันทึกแล้ว');
     } catch (err) {
         toast('บันทึกไม่สำเร็จ: ' + err.message);
+    }
+}
+
+async function changePassword() {
+    const current = $('currentPassword').value;
+    const next = $('newPassword').value;
+    const hint = $('passwordHint');
+
+    if (!current || !next) { hint.textContent = 'กรอกทั้งรหัสเดิมและรหัสใหม่'; return; }
+    if (next.length < 8) { hint.textContent = 'รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร'; return; }
+
+    const btn = $('changePasswordBtn');
+    btn.disabled = true;
+    hint.textContent = 'กำลังเปลี่ยน...';
+    try {
+        await api.changePassword(current, next);
+        $('currentPassword').value = '';
+        $('newPassword').value = '';
+        hint.textContent = '✅ เปลี่ยนรหัสผ่านแล้ว ครั้งหน้าใช้รหัสใหม่';
+        toast('เปลี่ยนรหัสผ่านแล้ว');
+    } catch (err) {
+        hint.textContent = '❌ ' + err.message;
+    } finally {
+        btn.disabled = false;
     }
 }
 

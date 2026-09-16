@@ -79,10 +79,20 @@ export async function getProfile() {
     return data || { id: user.id, username: user.email.split('@')[0], daily_goal: 20 };
 }
 
-export async function saveDailyGoal(goal) {
+export async function saveSettings({ dailyGoal, newPerDay }) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    return unwrap(await supabase.from('profiles').update({ daily_goal: goal }).eq('id', user.id));
+    const patch = {};
+    if (Number.isFinite(dailyGoal)) patch.daily_goal = dailyGoal;
+    if (Number.isFinite(newPerDay)) patch.new_per_day = newPerDay;
+    if (!Object.keys(patch).length) return;
+    return unwrap(await supabase.from('profiles').update(patch).eq('id', user.id));
+}
+
+export async function changePassword(currentPassword, newPassword) {
+    return unwrap(await supabase.rpc('change_password', {
+        p_current: currentPassword, p_new: newPassword
+    }));
 }
 
 // ===================== STUDY =====================
@@ -99,6 +109,11 @@ export async function reviewCard(wordId, grade, mode = 'flip') {
     return unwrap(await supabase.rpc('review_card', {
         p_word_id: wordId, p_grade: grade, p_mode: mode
     }));
+}
+
+/** Roll back the most recent answer — a misclick used to be permanent. */
+export async function undoLastReview() {
+    return unwrap(await supabase.rpc('undo_last_review'));
 }
 
 export async function setSuspended(wordId, suspended) {

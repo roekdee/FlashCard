@@ -10,3 +10,4 @@
 supabase/seed/legacy_*.json
 dist/
 flashcard-site.zip
+.enrich/
