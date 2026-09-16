@@ -19,6 +19,13 @@
           billing_live     = false;   -- true เมื่อสลับไปคีย์ live
    ```
 
+   เช็คสถานะการตั้งค่าทั้งหมดได้ด้วย:
+   ```sql
+   select omise_public_key is not null as omise_ready,
+          billing_live, google_enabled, allow_signup
+   from public.app_settings;
+   ```
+
 3. ใส่ **secret key** เป็น Edge Function secret
    Supabase → **Edge Functions → Secrets → Add new secret**
    | Name | Value |
@@ -66,8 +73,13 @@ Supabase free tier ส่งได้ ~2 ฉบับ/ชั่วโมง ใ�
    https://xixvrekqkikxrzrinjko.supabase.co/auth/v1/callback
    ```
 3. Supabase → **Authentication → Providers → Google** → เปิด แล้วใส่ Client ID + Client Secret
+4. เปิดปุ่มในหน้า login:
+   ```sql
+   update public.app_settings set google_enabled = true;
+   ```
 
-ยังไม่ตั้งค่า ปุ่ม Google จะขึ้น error ว่า provider ยังไม่เปิด — ส่วนอื่นใช้ได้ปกติ
+**ปุ่ม Google ถูกซ่อนไว้จนกว่าจะรัน SQL ข้อ 4** — กันไม่ให้ผู้ใช้เจอปุ่มที่กดแล้วขึ้น
+`Unsupported provider: provider is not enabled` ทำข้อ 1-3 ให้เสร็จก่อนค่อยเปิด
 
 ---
 

@@ -44,6 +44,9 @@ function translateError(error) {
     if (msg.includes('for security purposes') || msg.includes('rate limit')) {
         return 'ทำรายการถี่เกินไป รออีกสักครู่แล้วลองใหม่';
     }
+    if (msg.includes('provider is not enabled') || msg.includes('unsupported provider')) {
+        return 'ยังไม่ได้เปิดใช้งาน Google login — เข้าสู่ระบบด้วยอีเมลไปก่อน';
+    }
     if (msg.includes('failed to fetch') || msg.includes('networkerror')) return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้';
     return error.message || 'เกิดข้อผิดพลาด';
 }

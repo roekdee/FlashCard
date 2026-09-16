@@ -36,6 +36,11 @@ const allowedLevels = () => state.stats?.levels || null;
 document.addEventListener('DOMContentLoaded', async () => {
     bindAuthUI();
     registerServiceWorker();
+    applyPublicConfig();
+
+    // An OAuth round trip that fails comes back as fragment parameters rather
+    // than a rejected promise, so read them before anything clears the hash.
+    const redirectError = takeRedirectError();
 
     // Supabase puts the recovery session in the URL fragment before we get here.
     const recovering = location.hash.includes('type=recovery') || location.hash === '#reset';
@@ -49,7 +54,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { data: { session } } = await api.supabase.auth.getSession();
     if (recovering && session) showReset();
     else if (session) await enterApp();
-    else showLogin();
+    else {
+        showLogin();                            // resets the form, so report after
+        if (redirectError) authError(redirectError);
+    }
 
     window.addEventListener('online', async () => {
         setConn(true);
@@ -62,6 +70,45 @@ document.addEventListener('DOMContentLoaded', async () => {
 function registerServiceWorker() {
     if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
     navigator.serviceWorker.register('sw.js').catch(() => { /* not fatal */ });
+}
+
+/**
+ * Read an OAuth failure out of the URL and clear it.
+ *
+ * A failed round trip comes back as fragment parameters rather than a rejected
+ * promise, so there is nothing to catch — the message has to be picked up here.
+ */
+function takeRedirectError() {
+    const params = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const code = params.get('error') || params.get('error_code');
+    if (!code) return null;
+
+    const detail = decodeURIComponent((params.get('error_description') || '').replace(/\+/g, ' '));
+    history.replaceState(null, '', location.pathname);
+
+    if (/provider/i.test(detail) || /provider/i.test(code)) {
+        return 'ยังไม่ได้เปิดใช้งาน Google login — เข้าสู่ระบบด้วยอีเมลไปก่อน';
+    }
+    return detail || 'เข้าสู่ระบบไม่สำเร็จ';
+}
+
+/**
+ * Hide the sign-in options the project has not been configured for.
+ *
+ * Google was shown unconditionally, so before the provider was enabled in the
+ * Supabase dashboard the button just produced "provider is not enabled".
+ */
+async function applyPublicConfig() {
+    show($('googleBtn'), false);
+    show($('googleDivider'), false);
+    try {
+        state.billing = await api.getBillingConfig();
+    } catch {
+        return;   // leave the email form working on its own
+    }
+    const google = Boolean(state.billing.google_enabled);
+    show($('googleBtn'), google);
+    show($('googleDivider'), google);
 }
 
 // ===================== AUTH =====================
