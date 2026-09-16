@@ -1,154 +1,148 @@
-# 🚀 Quick Start Guide
+# 🚀 Quick Start
 
-## ขั้นตอนติดตั้งแบบเร็ว (5-10 นาที)
-
-### 1️⃣ สร้าง Google Sheets (2 นาที)
-
-1. ไปที่ https://sheets.google.com
-2. สร้าง Google Sheets ใหม่
-3. สร้าง 2 sheets:
-   - **Sheet 1**: เปลี่ยนชื่อเป็น `words`
-   - **Sheet 2**: เปลี่ยนชื่อเป็น `user_state`
-
-4. ใน sheet `words` ใส่หัวตาราง:
-   ```
-   id | word | translation
-   ```
-
-5. ใน sheet `user_state` ใส่หัวตาราง:
-   ```
-   user_id | word_id | learned | hidden_forever | repetitions | interval | ef | next_due | updated_at
-   ```
-
-6. เพิ่มข้อมูลตัวอย่างใน `words` (คัดลอกจาก `SHEETS_TEMPLATE.md`)
-
-7. Copy **SPREADSHEET_ID** จาก URL:
-   ```
-   https://docs.google.com/spreadsheets/d/[SPREADSHEET_ID]/edit
-   ```
+ติดตั้งใหม่ทั้งหมดประมาณ 10 นาที ไม่ต้องมีเซิร์ฟเวอร์ ไม่ต้อง build
 
 ---
 
-### 2️⃣ Deploy Google Apps Script (3 นาที)
+## 1️⃣ สร้าง Supabase project (2 นาที)
 
-1. ใน Google Sheets → **Extensions** → **Apps Script**
-2. ลบโค้ดเดิมทั้งหมด
-3. Copy-paste ทั้งหมดจาก `Code.gs`
-4. แก้ไข 3 ค่าใน **CONFIG**:
-   ```javascript
-   const CONFIG = {
-     SPREADSHEET_ID: 'ใส่ ID ที่คัดลอกไว้',
-     SHEET_WORDS: 'words',
-     SHEET_USER_STATE: 'user_state',
-     CORS_ORIGIN: 'https://YOUR_GITHUB_USERNAME.github.io',
-     API_KEY: 'สร้าง random string ยาวๆ เช่น Kx9mP2vL8nQ4tR7wY3zA5bC1dE6fG0hJ'
-   };
-   ```
-
-5. กด **💾 Save** (Ctrl+S)
-6. กด **Deploy** → **New deployment**:
-   - เลือก type: **Web app**
-   - Execute as: **Me**
-   - Who has access: **Anyone**
-   - กด **Deploy**
-7. Copy **Web app URL** (Deployment ID อยู่ใน URL)
-   ```
-   https://script.google.com/macros/s/[DEPLOYMENT_ID]/exec
-   ```
+1. ไปที่ https://supabase.com → **New project**
+2. เลือก region ใกล้ผู้ใช้ (ไทย → `ap-southeast-1` Singapore)
+3. รอจน status เป็น **ACTIVE**
+4. เก็บค่า 2 อย่างจาก **Project Settings → API**
+   - **Project URL** เช่น `https://xxxxxxxx.supabase.co`
+   - **Publishable key** (`sb_publishable_…`) — คีย์นี้**ตั้งใจให้อยู่ใน browser** ความปลอดภัยมาจาก RLS ไม่ใช่การซ่อนคีย์
+   - ⚠️ อย่าเอา **service_role** key มาใส่ในโค้ดฝั่ง frontend เด็ดขาด
 
 ---
 
-### 3️⃣ Deploy Frontend (GitHub Pages) (3 นาที)
+## 2️⃣ สร้าง schema (3 นาที)
 
-#### Option A: Upload ผ่าน GitHub Web
+เปิด **SQL Editor** ใน Supabase แล้วรันไฟล์ใน `supabase/migrations/` **ตามลำดับ**:
 
-1. สร้าง GitHub repository ใหม่ (เช่น `oxford-flashcards`)
-2. Upload 4 ไฟล์:
-   - `index.html`
-   - `app.js`
-   - `styles.css`
-   - `README.md`
-3. แก้ไข `app.js` (กดไอคอนดินสอ):
-   ```javascript
-   const CONFIG = {
-       API_URL: 'ใส่ Web app URL จากข้อ 2.7',
-       API_KEY: 'ใส่ API Key เดียวกับใน Code.gs',
-       USER_ID_KEY: 'flash_user_id'
-   };
-   ```
-4. Commit changes
-5. ไปที่ **Settings** → **Pages**
-6. Source: เลือก `main` branch → **Save**
-7. รอ 1-2 นาที แล้วเข้า `https://YOUR_USERNAME.github.io/oxford-flashcards`
+| ไฟล์ | ทำอะไร |
+|---|---|
+| `0001_core_schema.sql` | ตาราง `words` `profiles` `card_states` `reviews` + index + RLS policy |
+| `0002_sm2_rpc.sql` | SM-2, คิวทบทวน, สถิติ, ค้นหา — ทั้งหมดเป็นฟังก์ชันใน DB |
+| `0003_migrate_from_sheets.sql` | ย้ายข้อมูลจาก Google Sheet เดิม — **ข้ามได้ถ้าติดตั้งใหม่** (ไฟล์เช็คเองแล้วไม่ทำอะไร) |
+| `0004_register_user.sql` | สมัครสมาชิกด้วย username |
+| `0005_clean_word_column.sql` | ล้าง POS ที่ปนอยู่ในคอลัมน์ `word` |
 
-#### Option B: ใช้ Git (ถ้าติดตั้ง Git แล้ว)
+ถ้าใช้ Supabase CLI: `supabase db push`
 
-```bash
-cd flashcard
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/oxford-flashcards.git
-git push -u origin main
+---
+
+## 3️⃣ โหลดคำศัพท์ 3,025 คำ (2 นาที)
+
+`supabase/seed/words_01..07.json` คือคลังคำพร้อมคำแปลไทย
+
+ตาราง `words` ตั้งใจให้เขียนไม่ได้ผ่าน API จึงต้องเปิดสิทธิ์ชั่วคราวตอนโหลด:
+
+```sql
+create policy words_seed_tmp on public.words for insert to anon with check (true);
 ```
 
-แล้วทำตามข้อ 5-7 ของ Option A
+```bash
+URL="https://xxxxxxxx.supabase.co/rest/v1/words"
+KEY="sb_publishable_xxxxxxxx"
+for f in supabase/seed/words_*.json; do
+  curl -s -o /dev/null -w "$f -> %{http_code}\n" -X POST "$URL" \
+    -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+    -H "Content-Type: application/json" \
+    -H "Prefer: resolution=merge-duplicates,return=minimal" \
+    --data-binary "@$f"
+done
+```
+
+**ปิดสิทธิ์ทันทีที่โหลดเสร็จ** (ข้อนี้ห้ามลืม — ถ้าค้างไว้ ใครก็เขียนคลังคำได้):
+
+```sql
+drop policy words_seed_tmp on public.words;
+select count(*) from public.words;   -- ควรได้ 3025
+```
 
 ---
 
-### 4️⃣ ทดสอบระบบ
+## 4️⃣ ตั้งค่า frontend (1 นาที)
 
-1. เปิด `https://YOUR_USERNAME.github.io/oxford-flashcards`
-2. กดปุ่ม **"เริ่มสุ่ม"**
-3. ถ้าขึ้นคำ → สำเร็จ! 🎉
-4. ถ้าขึ้น Error:
-   - เปิด Console (F12)
-   - ดูข้อความ error
-   - ตรวจสอบ:
-     - ✅ SPREADSHEET_ID ถูกต้อง
-     - ✅ API_URL และ API_KEY ตรงกันใน Code.gs และ app.js
-     - ✅ CORS_ORIGIN ตรงกับโดเมน GitHub Pages
+แก้ `api.js` บรรทัดบนสุด:
+
+```javascript
+export const CONFIG = {
+    SUPABASE_URL: 'https://xxxxxxxx.supabase.co',
+    SUPABASE_KEY: 'sb_publishable_xxxxxxxx',
+    EMAIL_DOMAIN: 'oxford3000.local',
+    QUEUE_SIZE: 40
+};
+```
 
 ---
 
-## 📝 Checklist
+## 5️⃣ Deploy (2 นาที)
 
-- [ ] สร้าง Google Sheets (2 sheets: words, user_state)
-- [ ] เพิ่มข้อมูลตัวอย่างใน sheet words
-- [ ] Deploy Google Apps Script (Execute as Me, Anyone)
-- [ ] Copy Deployment ID
-- [ ] แก้ไข CONFIG ใน Code.gs
-- [ ] แก้ไข CONFIG ใน app.js
-- [ ] Upload ไฟล์ไป GitHub
-- [ ] เปิด GitHub Pages
-- [ ] ทดสอบเว็บใช้งานได้
+### GitHub Pages
+1. push ไฟล์ทั้งหมดขึ้น repo
+2. **Settings → Pages** → Source: branch `main` → **Save**
+3. เข้า `https://YOUR_USERNAME.github.io/REPO_NAME`
+
+### รันในเครื่อง
+```bash
+python -m http.server 8777
+```
+แล้วเปิด http://127.0.0.1:8777
+
+> ⚠️ เปิดไฟล์แบบ `file://` ไม่ได้ — โค้ดใช้ ES modules กับ service worker ต้องมี http(s)
+
+---
+
+## 6️⃣ สมัครผู้ใช้คนแรก
+
+กด **สมัครสมาชิก** ที่หน้า login (ชื่อผู้ใช้ `a-z 0-9 _` ยาว 3-32 · รหัสผ่านอย่างน้อย 8 ตัว)
+
+หรือสร้างจาก SQL Editor:
+```sql
+select public.register_user('yourname', 'yourpassword');
+```
 
 ---
 
 ## 🐛 แก้ปัญหาที่พบบ่อย
 
-### "Error fetching words"
-- ตรวจสอบ `SPREADSHEET_ID` ใน Code.gs
-- ตรวจสอบชื่อ sheet เป็น `words` (ตัวพิมพ์เล็ก)
-- Re-deploy Apps Script แล้ว copy Deployment ID ใหม่
+### `Database error querying schema` ตอน login
+มี row ใน `auth.users` ที่คอลัมน์ token เป็น `NULL` — GoTrue อ่านเป็น Go string ไม่ได้ เกิดตอน insert เข้า `auth.users` เองโดยไม่ใส่ค่า:
+```sql
+update auth.users set
+  confirmation_token = coalesce(confirmation_token, ''),
+  recovery_token     = coalesce(recovery_token, ''),
+  email_change       = coalesce(email_change, ''),
+  email_change_token_new     = coalesce(email_change_token_new, ''),
+  email_change_token_current = coalesce(email_change_token_current, ''),
+  phone_change       = coalesce(phone_change, ''),
+  phone_change_token = coalesce(phone_change_token, ''),
+  reauthentication_token = coalesce(reauthentication_token, '');
+```
 
-### "Invalid API Key"
-- ตรวจสอบ `API_KEY` ใน Code.gs และ app.js ต้องเหมือนกันทุกตัวอักษร
+### `Email address is invalid` ตอนสมัคร
+แปลว่ามีอะไรเรียก `supabase.auth.signUp()` อยู่ — GoTrue ไม่รับโดเมน `.local` แอปนี้ใช้ `register_user()` แทน (ดู `api.js`)
 
-### CORS Error
-- ตรวจสอบ `CORS_ORIGIN` ใน Code.gs
-- ต้องเป็น `https://` (ไม่ใช่ http://)
-- ต้องไม่มี `/` ท้ายสุด
+### ไม่มีคำขึ้นมา / `remaining` เป็น 0
+- `select count(*) from public.words;` ได้ 0 → ยังไม่ได้โหลด seed (ข้อ 3)
+- มีคำแต่ไม่ขึ้น → ตัวกรองระดับ/ชนิดคำเปิดค้างอยู่ กดเอาออก
 
-### ไม่มีคำขึ้นมา
-- ตรวจสอบว่าใน sheet `words` มีข้อมูลอย่างน้อย 1 แถว
-- ตรวจสอบคอลัมน์: `id`, `word`, `translation` สะกดถูกต้อง
+### `permission denied for function …`
+ยังไม่ได้รัน `grant execute` ท้ายไฟล์ `0002` — รัน `0002_sm2_rpc.sql` ซ้ำได้ ปลอดภัย (ทุกฟังก์ชันเป็น `create or replace`)
+
+### PWA ติดตั้งไม่ขึ้น
+ต้องเป็น `https://` หรือ `localhost` เท่านั้น และต้องโหลด `sw.js` กับ `manifest.webmanifest` ได้
 
 ---
 
-## 🎯 พร้อมใช้งาน!
+## ✅ Checklist
 
-เข้าใช้งานที่: `https://YOUR_USERNAME.github.io/REPO_NAME`
-
-🎓 เริ่มเรียนรู้คำศัพท์ Oxford 3000 ได้เลย!
+- [ ] Supabase project ACTIVE
+- [ ] รัน migration 0001, 0002, 0004, 0005
+- [ ] โหลด seed แล้วได้ 3025 คำ
+- [ ] **ลบ policy `words_seed_tmp` แล้ว**
+- [ ] ใส่ URL + publishable key ใน `api.js`
+- [ ] สมัคร user แล้ว login ได้
+- [ ] กด "เริ่มทบทวน" แล้วมีการ์ดขึ้น

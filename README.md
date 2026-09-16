@@ -7,57 +7,87 @@ A flashcard app for learning the Oxford 3000 word list, with spaced repetition.
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
 ![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=flat-square&logo=html5&logoColor=white)
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=flat-square&logo=css3&logoColor=white)
-![Google Apps Script](https://img.shields.io/badge/Google%20Apps%20Script-4285F4?style=flat-square&logo=google&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-222222?style=flat-square&logo=githubpages&logoColor=white)
 
 </div>
 
 ---
 
-I wanted to actually work through the Oxford 3000, so I built a flashcard trainer that schedules reviews with the SM-2 algorithm — the same idea Anki uses, where words you keep getting wrong show up again sooner. Progress is saved per user in a Google Sheet, and a Google Apps Script web app sits in front of it as the API. The frontend is plain HTML/CSS/JS hosted on GitHub Pages.
+I wanted to actually work through the Oxford 3000, so I built a flashcard trainer that schedules reviews with the SM-2 algorithm — the same idea Anki uses, where words you keep getting wrong show up again sooner. The frontend is plain HTML/CSS/JS on GitHub Pages; everything else lives in Postgres on Supabase.
 
 What it does:
 
-- **Spaced repetition (SM-2)** — each card tracks its ease factor, interval, repetition count, and next-due date.
-- **Per-user progress** — log in with a username and password; your learned and hidden cards and your schedule are kept separately per user.
-- **Google Sheets as the database** — the Apps Script reads and writes the sheet, so there's no server to run.
-- **API key + CORS check** — the Apps Script endpoint checks a shared key and an allowed origin before it answers.
-- **No framework** — vanilla HTML/CSS/JS, works as a static site.
+- **Spaced repetition (SM-2)** — grade each card *ลืม / ยาก / ได้ / ง่าย* and the ease factor, interval and next-due date are recalculated. Each button shows the interval it will give you before you press it.
+- **Three study modes** — flip the card, pick from four meanings, or type the translation.
+- **Pronunciation** — the browser's own speech synthesis reads the word out; no audio files, no API.
+- **Stats** — a daily goal bar, a review streak, a year-long heatmap and progress per CEFR level.
+- **Filters and search** — study only A1, or only verbs; search all 3,025 words in English or Thai.
+- **Per-user progress, enforced by the database** — row level security means a user's card states and review log are unreadable to anyone else, even with the browser key in hand.
+- **Installable and offline-tolerant** — a PWA, and reviews you make with no connection are queued and replayed when it comes back.
+- **No framework, no build step** — plain ES modules, works as a static site.
 
 ## How it works
 
 ```
-┌─────────────────┐      fetch (API key)      ┌──────────────────────┐
-│  Frontend       │ ────────────────────────▶ │  Google Apps Script  │
-│  (GitHub Pages) │ ◀──────────────────────── │  Web App (doGet/doPost)
-│  index.html     │        JSON                └──────────┬───────────┘
-│  app.js         │                                       │ read / write
-└─────────────────┘                            ┌──────────▼───────────┐
-                                                │  Google Sheets       │
-                                                │  words · user_state  │
-                                                └──────────────────────┘
+┌─────────────────┐     supabase-js (JWT)     ┌──────────────────────┐
+│  Frontend       │ ────────────────────────▶ │  Supabase            │
+│  (GitHub Pages) │ ◀──────────────────────── │  Auth + PostgREST    │
+│  index.html     │          JSON             └──────────┬───────────┘
+│  app.js · api.js│                                      │
+└─────────────────┘                           ┌──────────▼───────────┐
+                                              │  Postgres            │
+                                              │  words · profiles    │
+                                              │  card_states·reviews │
+                                              │  + SM-2 in SQL, RLS  │
+                                              └──────────────────────┘
 ```
 
-- **`words`** sheet — the vocabulary (`id | word | translation`).
-- **`user_state`** sheet — one row per user/word with the SM-2 fields (`learned`, `repetitions`, `interval`, `ef`, `next_due`, …).
-- **`Code.gs`** — the Apps Script API: auth check, fetch due cards, save review results.
-- **`app.js`** — the SRS logic, login flow, and card UI.
+Scheduling, queue building and stats all run **inside the database**, so one screen is one round trip:
+
+| Function | What it does |
+|---|---|
+| `get_study_queue(limit, levels, pos)` | due cards first, topped up with unseen words |
+| `review_card(word_id, grade, mode)` | applies SM-2, writes the card state and the review log, atomically |
+| `set_card_suspended(word_id, bool)` | the "จำได้แล้ว" list |
+| `get_stats()` | counts, today, streak, 365-day heatmap, per-level progress, in one JSON |
+| `search_words(query, levels, …)` | catalogue search, English or Thai, with your status per row |
+| `get_quiz_options(word_id)` | three same-level distractors for the quiz mode |
+| `register_user(username, password)` | sign-up by username (see *Auth* below) |
+
+Files:
+
+- **`api.js`** — every call to Supabase, plus the offline outbox.
+- **`app.js`** — views, the study loop, keyboard shortcuts, speech.
+- **`supabase/migrations/`** — the whole schema, the SM-2 implementation and the RLS policies.
+- **`supabase/seed/`** — the 3,025-word catalogue as JSON.
 
 ## Setup
 
-The full step-by-step (exact sheet headers and deployment settings) is in **[QUICKSTART.md](QUICKSTART.md)**. Short version:
+Full steps in **[QUICKSTART.md](QUICKSTART.md)**. Short version: create a Supabase project, run the five migrations, load the seed, put your project URL and publishable key in `api.js`, and serve the folder as a static site.
 
-1. Create a Google Sheet with `words` and `user_state` tabs.
-2. Open **Extensions → Apps Script**, paste in `Code.gs`, and fill in the `CONFIG` block (spreadsheet ID, API key, CORS origin).
-3. **Deploy → Web app** (execute as *me*, access *anyone*) and copy the URL.
-4. Put that URL and API key into `app.js`, then host `index.html`, `app.js`, and `styles.css` on GitHub Pages.
+The publishable key is *meant* to be in the browser — RLS is what protects the data, and the policies are in `0001_core_schema.sql` if you want to check them.
 
-## Tech
+## Keyboard
 
-Vanilla JavaScript, HTML5, CSS3, Google Apps Script, Google Sheets, GitHub Pages.
+| Key | Action |
+|---|---|
+| `Space` | show / hide the translation |
+| `1` `2` `3` `4` | ลืม / ยาก / ได้ / ง่าย |
+| `S` | speak the word |
+| `N` | skip to the back of the session |
+
+## Auth
+
+Sign-in is by username, which Supabase Auth cannot do directly — it wants an email. Accounts therefore use a synthetic `<username>@oxford3000.local` address, and sign-up goes through the `register_user` database function rather than `auth.signUp`, because GoTrue rejects that domain and, on the free tier, would try to send a confirmation mail capped at about two an hour.
+
+That function is `security definer` and writes to `auth.users` itself. It validates the username and password and caps the project at 500 accounts, but it is still the one place in this app where an unauthenticated caller writes to an auth table — worth reading before you deploy it somewhere that matters. Swap it for ordinary email sign-up if you would rather not have it.
 
 ## Notes
 
-Using Apps Script + a Sheet as the backend was the main call here. It meant I could ship a real per-user app without standing up or paying for a server, and the data is right there in a spreadsheet I can open and edit by hand.
+This replaced a Google Sheet. The old version kept the word list and every user's progress in two tabs of a spreadsheet, with a Google Apps Script web app in front as the API, and it worked — but Apps Script re-read the entire sheet on every request and wrote back one cell at a time, so a cold call took seconds and the client had to cache aggressively to hide it. The same calls against Postgres come back in about 100ms, which is the whole reason for the move.
 
-The trade-offs are real, though. Auth is basic — a username/password row in a sheet plus a shared API key, which is fine for a personal study tool but I wouldn't put anything sensitive behind it. It also depends on a Google Sheet you set up yourself, so there's no one-click install; you have to follow the QUICKSTART. And Apps Script can be slow on a cold request, which is why there's caching on the client. If I kept going I'd look at batching the writes and maybe moving off Sheets if the word/user count grew.
+Two things about the old version worth recording. The API checked its shared key only on `POST`, and every real call went through `GET` — so anyone with the URL could read or overwrite any user's progress. And the README claimed SM-2, but no code ever computed it: the `ef`, `interval` and `next_due` columns sat at their defaults on all 190 rows. The scheduling in this version is real, and `0002_sm2_rpc.sql` is where it lives.
+
+The word data came over as-is and is not perfect. Pronunciations exist for 117 of 3,025 words, and a few translations are plainly wrong (`bank (river)` is glossed as *ธนาคาร*). The part-of-speech tags that had leaked into the word column — `our det.`, `fifteen number` — are cleaned up in `0005_clean_word_column.sql`.

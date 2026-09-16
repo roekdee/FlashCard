@@ -1,1021 +1,814 @@
 /**
- * Oxford 3000 Flashcards - Frontend JavaScript
+ * Oxford 3000 Flashcards — UI.
+ *
+ * The scheduling lives in Postgres (see api.js and supabase/migrations/).
+ * This file is presentation and input handling only.
  */
-
-// ===================== CONFIG =====================
-const CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbxNwerSDLj8cFX6HIIcnFYYvhPyohFL5eUnMoZ4jXvEIP1bF-ByZJw9IJT2pWbVh5HctQ/exec', // ⚠️ แก้ไขตรงนี้
-    API_KEY: 'AKfycbxNwerSDLj8cFX6HIIcnFYYvhPyohFL5eUnMoZ4jXvEIP1bF-ByZJw9IJT2pWbVh5HctQ', // ⚠️ ต้องตรงกับ Code.gs
-    USER_ID_KEY: 'flash_user_id',
-    AUTH_KEY: 'flash_auth_data'
-};
+import * as api from './api.js';
 
 // ===================== STATE =====================
-let userId = null;
-let currentUser = null;
-let wordPool = [];
-let currentWordIndex = 0;
-let learnedCount = 0;
-let totalWordsInSheet = 0; // จำนวนคำทั้งหมดใน sheet
-let hiddenWordsCount = 0; // จำนวนคำที่ซ่อน
+const state = {
+    profile: null,
+    stats: null,
+    queue: [],
+    index: 0,
+    revealed: false,
+    mode: 'flip',
+    levels: [],
+    pos: '',
+    answering: false,
+    signupMode: false
+};
 
-// Cache - เพิ่มเวลา cache และใช้ in-memory cache
-const CACHE_KEY = 'flash_words_cache';
-const CACHE_STATS_KEY = 'flash_stats_cache';
-const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes (เพิ่มจาก 5)
+const $ = (id) => document.getElementById(id);
+const show = (el, on) => { if (el) el.hidden = !on; };
 
-// In-memory cache สำหรับความเร็ว
-const memoryCache = new Map();
+// ===================== BOOT =====================
+document.addEventListener('DOMContentLoaded', async () => {
+    bindAuthUI();
+    registerServiceWorker();
 
-function getCachedData(key) {
-    // ลองหา in-memory cache ก่อน (เร็วกว่า localStorage)
-    if (memoryCache.has(key)) {
-        const cached = memoryCache.get(key);
-        if (Date.now() - cached.timestamp < CACHE_DURATION) {
-            return cached.value;
-        }
-        memoryCache.delete(key);
+    const { data: { session } } = await api.supabase.auth.getSession();
+    if (session) {
+        await enterApp();
+    } else {
+        showLogin();
     }
-    
-    // ถ้าไม่มีใน memory ลอง localStorage
-    const cached = localStorage.getItem(key);
-    if (!cached) return null;
-    
-    try {
-        const data = JSON.parse(cached);
-        if (Date.now() - data.timestamp < CACHE_DURATION) {
-            // เก็บเข้า memory cache ด้วย
-            memoryCache.set(key, data);
-            return data.value;
-        }
-        localStorage.removeItem(key);
-    } catch (e) {
-        localStorage.removeItem(key);
-    }
-    return null;
-}
 
-function setCachedData(key, value) {
-    const data = {
-        value: value,
-        timestamp: Date.now()
-    };
-    
-    // เก็บทั้ง memory และ localStorage
-    memoryCache.set(key, data);
-    
-    try {
-        localStorage.setItem(key, JSON.stringify(data));
-    } catch (e) {
-        console.error('Cache error:', e);
-        // ถ้า localStorage เต็ม ให้ลบ cache เก่า
-        try {
-            const keys = Object.keys(localStorage);
-            keys.forEach(k => {
-                if (k.startsWith('flash_')) {
-                    const item = localStorage.getItem(k);
-                    if (item) {
-                        const parsed = JSON.parse(item);
-                        if (Date.now() - parsed.timestamp > CACHE_DURATION) {
-                            localStorage.removeItem(k);
-                        }
-                    }
-                }
-            });
-            // ลองอีกครั้ง
-            localStorage.setItem(key, JSON.stringify(data));
-        } catch (e2) {
-            console.error('Failed to save cache:', e2);
-        }
-    }
-}
+    api.supabase.auth.onAuthStateChange((event) => {
+        if (event === 'SIGNED_OUT') location.reload();
+    });
 
-// ===================== INIT =====================
-document.addEventListener('DOMContentLoaded', () => {
-    checkAuth();
+    window.addEventListener('online', async () => {
+        setConn(true);
+        const sent = await api.flushOutbox();
+        if (sent) {
+            toast(`ส่งผลทบทวนที่ค้างไว้ ${sent} รายการแล้ว`);
+            refreshStats();
+        }
+    });
+    window.addEventListener('offline', () => setConn(false));
 });
 
-// ===================== AUTH FUNCTIONS =====================
-function checkAuth() {
-    const authData = localStorage.getItem(CONFIG.AUTH_KEY);
-    
-    if (authData) {
-        try {
-            currentUser = JSON.parse(authData);
-            showMainApp();
-        } catch (e) {
-            showLoginScreen();
-        }
-    } else {
-        showLoginScreen();
-    }
+function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    if (location.protocol === 'file:') return;
+    navigator.serviceWorker.register('sw.js').catch(() => { /* not fatal */ });
 }
 
-function showLoginScreen() {
-    const loginScreen = document.getElementById('loginScreen');
-    const mainApp = document.getElementById('mainApp');
-    const loginBtn = document.getElementById('loginBtn');
-    const passwordInput = document.getElementById('password');
-    
-    if (loginScreen) loginScreen.style.display = 'flex';
-    if (mainApp) mainApp.style.display = 'none';
-    
-    // Event listeners for login (ลบ listener เก่าก่อนเพื่อไม่ให้ซ้อน)
-    if (loginBtn) {
-        loginBtn.replaceWith(loginBtn.cloneNode(true));
-        const newLoginBtn = document.getElementById('loginBtn');
-        newLoginBtn.addEventListener('click', handleLogin);
-    }
-    
-    if (passwordInput) {
-        passwordInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') handleLogin();
-        });
-    }
+// ===================== AUTH =====================
+function bindAuthUI() {
+    $('loginBtn').addEventListener('click', submitAuth);
+    $('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAuth(); });
+    $('username').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('password').focus(); });
+    $('authSwitchBtn').addEventListener('click', toggleAuthMode);
 }
 
-function showMainApp() {
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('mainApp').style.display = 'block';
-    
-    initUserId();
-    initEventListeners();
-    
-    // แสดงชื่อผู้ใช้
-    document.getElementById('currentUsername').textContent = currentUser.username;
+function toggleAuthMode() {
+    state.signupMode = !state.signupMode;
+    $('authTitle').textContent = state.signupMode ? 'สมัครสมาชิก' : 'เข้าสู่ระบบ';
+    $('loginBtn').textContent = state.signupMode ? '✨ สมัครสมาชิก' : '🚀 เข้าสู่ระบบ';
+    $('authSwitchText').textContent = state.signupMode ? 'มีบัญชีอยู่แล้ว?' : 'ยังไม่มีบัญชี?';
+    $('authSwitchBtn').textContent = state.signupMode ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก';
+    $('password').autocomplete = state.signupMode ? 'new-password' : 'current-password';
+    authError('');
 }
 
-function handleLogin() {
-    const username = document.getElementById('username').value.trim();
-    const password = document.getElementById('password').value.trim();
-    
-    if (!username || !password) {
-        alert('⚠️ กรุณากรอกชื่อผู้ใช้และรหัสผ่าน');
-        return;
-    }
-    
-    if (username.length < 3) {
-        alert('⚠️ ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร');
-        return;
-    }
-    
-    if (password.length < 4) {
-        alert('⚠️ รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร');
-        return;
-    }
-    
-    // ตรวจสอบ login กับ backend
-    const loginBtn = document.getElementById('loginBtn');
-    if (!loginBtn) {
-        console.error('loginBtn element not found');
-        alert('❌ ไม่พบปุ่ม Login');
-        return;
-    }
-    
-    loginBtn.disabled = true;
-    loginBtn.textContent = '🔄 กำลังเข้าสู่ระบบ...';
-    
-    const loginUrl = `${CONFIG.API_URL}?route=login&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-    
-    fetch(loginUrl)
-        .then(res => {
-            return res.json();
-        })
-        .then(data => {
-            if (data.ok && data.user) {
-                // เก็บข้อมูล user
-                currentUser = data.user;
-                localStorage.setItem(CONFIG.AUTH_KEY, JSON.stringify(data.user));
-                showMainApp();
-            } else {
-                alert('❌ ' + (data.error || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'));
-            }
-        })
-        .catch(err => {
-            console.error('Login error:', err);
-            alert('❌ เกิดข้อผิดพลาดในการเข้าสู่ระบบ: ' + err.message);
-        })
-        .finally(() => {
-            if (loginBtn) {
-                loginBtn.disabled = false;
-                loginBtn.textContent = '🔐 เข้าสู่ระบบ';
-            }
-        });
+function authError(msg) {
+    const el = $('authError');
+    el.textContent = msg;
+    show(el, Boolean(msg));
 }
 
-function handleLogout() {
-    if (confirm('🚪 ต้องการออกจากระบบใช่หรือไม่?')) {
-        // ลบทุก cache
-        localStorage.removeItem(CONFIG.AUTH_KEY);
-        localStorage.removeItem(CACHE_KEY + '_' + userId);
-        localStorage.removeItem(CACHE_STATS_KEY + '_' + userId);
-        currentUser = null;
-        window.location.reload();
-    }
-}
+async function submitAuth() {
+    const username = $('username').value.trim();
+    const password = $('password').value;
+    authError('');
 
-function initUserId() {
-    // ใช้ user_id จาก backend แทน
-    if (currentUser && currentUser.user_id) {
-        userId = currentUser.user_id;
-        const userIdElement = document.getElementById('userIdDisplay');
-        if (userIdElement) {
-            userIdElement.textContent = userId.substring(0, 8);
-        }
-    } else {
-        // fallback ถ้าไม่มี user_id
-        userId = crypto.randomUUID();
-        const userIdElement = document.getElementById('userIdDisplay');
-        if (userIdElement) {
-            userIdElement.textContent = userId.substring(0, 8);
-        }
-    }
-}
+    if (username.length < 3) return authError('ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร');
+    // Only new passwords have to clear the bar — accounts carried over from the
+    // old spreadsheet have shorter ones and must still be able to sign in.
+    if (state.signupMode && password.length < 8) return authError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร');
+    if (!password) return authError('กรุณากรอกรหัสผ่าน');
 
-function initEventListeners() {
-    const startBtn = document.getElementById('startBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const learnedBtn = document.getElementById('learnedBtn');
-    const hideBtn = document.getElementById('hideBtn');
-    const showTranslationToggle = document.getElementById('showTranslationToggle');
-    const viewHiddenBtn = document.getElementById('viewHiddenBtn');
-    const closeModalBtn = document.getElementById('closeModalBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const hiddenModal = document.getElementById('hiddenModal');
-    
-    if (startBtn) startBtn.addEventListener('click', handleStart);
-    if (nextBtn) nextBtn.addEventListener('click', handleNext);
-    if (learnedBtn) learnedBtn.addEventListener('click', handleLearnedAndNext);
-    if (hideBtn) hideBtn.addEventListener('click', handleHideAndNext);
-    if (showTranslationToggle) showTranslationToggle.addEventListener('change', handleTranslationToggle);
-    if (viewHiddenBtn) viewHiddenBtn.addEventListener('click', openHiddenModal);
-    if (closeModalBtn) closeModalBtn.addEventListener('click', closeHiddenModal);
-    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
-    
-    // ปิด modal เษื่อคลิกนอก modal-content
-    if (hiddenModal) {
-        hiddenModal.addEventListener('click', (e) => {
-            if (e.target.id === 'hiddenModal') {
-                closeHiddenModal();
-            }
-        });
-    }
-    
-    // Event delegation สำหรับ unhide buttons
-    const hiddenWordsList = document.getElementById('hiddenWordsList');
-    if (hiddenWordsList) {
-        hiddenWordsList.addEventListener('click', (e) => {
-            if (e.target.classList.contains('btn-unhide')) {
-                const wordId = e.target.getAttribute('data-word-id');
-                if (wordId) {
-                    handleUnhide(wordId);
-                }
-            }
-        });
-    }
-}
+    const btn = $('loginBtn');
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '🔄 กำลังดำเนินการ...';
 
-// ===================== API CALLS =====================
-// Request deduplication - ป้องกัน API calls ซ้ำ
-const pendingRequests = new Map();
-
-async function fetchTotalStats() {
     try {
-        // ลอง cache ก่อน
-        const cached = getCachedData(CACHE_STATS_KEY + '_' + userId);
-        if (cached) {
-            return cached;
+        if (state.signupMode) {
+            await api.signUp(username, password);
+        } else {
+            await api.signIn(username, password);
         }
-        
-        // ตรวจสอบว่ากำลังโหลดอยู่หรือไม่
-        const requestKey = 'stats_' + userId;
-        if (pendingRequests.has(requestKey)) {
-            return pendingRequests.get(requestKey);
-        }
-        
-        const url = `${CONFIG.API_URL}?route=stats&userId=${userId}`;
-        
-        const requestPromise = fetch(url)
-            .then(res => res.json())
-            .then(data => {
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                // เก็บ cache
-                setCachedData(CACHE_STATS_KEY + '_' + userId, data);
-                return data;
-            })
-            .finally(() => {
-                pendingRequests.delete(requestKey);
-            });
-        
-        pendingRequests.set(requestKey, requestPromise);
-        return requestPromise;
-    } catch (error) {
-        console.error('Error fetching stats:', error);
-        return { total: 0, hidden: 0, learned: 0 };
-    }
-}
-
-async function fetchWords(forceRefresh = false) {
-    try {
-        // ถ้าไม่บังคับ refresh ให้ลอง cache ก่อน
-        if (!forceRefresh) {
-            const cached = getCachedData(CACHE_KEY + '_' + userId);
-            if (cached) {
-                return cached;
-            }
-        }
-        
-        // ตรวจสอบว่ากำลังโหลดอยู่หรือไม่
-        const requestKey = 'words_' + userId;
-        if (pendingRequests.has(requestKey)) {
-            return pendingRequests.get(requestKey);
-        }
-        
-        // เพิ่ม timestamp เพื่อป้องกัน browser cache และให้สุ่มคำใหม่ทุกครั้ง
-        const timestamp = Date.now();
-        const url = `${CONFIG.API_URL}?route=words&limit=200&excludeLearned=1&userId=${userId}&_t=${timestamp}`;
-        
-        const requestPromise = fetch(url)
-            .then(res => res.json())
-            .then(data => {
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                const words = data.data || [];
-                // เก็บ cache
-                setCachedData(CACHE_KEY + '_' + userId, words);
-                return words;
-            })
-            .catch(error => {
-                console.error('Error fetching words:', error);
-                alert('เกิดข้อผิดพลาดในการโหลดคำ: ' + error.message);
-                return [];
-            })
-            .finally(() => {
-                pendingRequests.delete(requestKey);
-            });
-        
-        pendingRequests.set(requestKey, requestPromise);
-        return requestPromise;
-    } catch (error) {
-        console.error('Error fetching words:', error);
-        alert('เกิดข้อผิดพลาดในการโหลดคำ: ' + error.message);
-        return [];
-    }
-}
-
-// Batch save queue สำหรับ performance
-let saveQueue = [];
-let saveTimeout = null;
-
-async function saveWordState(wordId, learned = false, hiddenForever = false) {
-    try {
-        // ใช้ GET แทน POST เพื่อหลีกเลี่ยง CORS preflight
-        const url = `${CONFIG.API_URL}?route=save_state&user_id=${userId}&word_id=${wordId}&learned=${learned}&hidden_forever=${hiddenForever}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        // ลบ cache เพื่อบังคับ reload ครั้งถัดไป (แต่รอสักครั้ง)
-        debouncedCacheClear();
-        
-        return data;
-    } catch (error) {
-        console.error('Error saving state:', error);
-        alert('เกิดข้อผิดพลาดในการบันทึก: ' + error.message);
-        return null;
-    }
-}
-
-// Debounced cache clear เพื่อไม่ให้ลบ cache บ่อยเกินไป
-const debouncedCacheClear = debounce(() => {
-    localStorage.removeItem(CACHE_KEY + '_' + userId);
-    localStorage.removeItem(CACHE_STATS_KEY + '_' + userId);
-    memoryCache.delete(CACHE_KEY + '_' + userId);
-    memoryCache.delete(CACHE_STATS_KEY + '_' + userId);
-}, 1000);
-
-async function getHiddenWords() {
-    try {
-        // เพิ่ม cache สำหรับ hidden words
-        const cacheKey = 'flash_hidden_cache_' + userId;
-        const cached = getCachedData(cacheKey);
-        if (cached) {
-            return cached;
-        }
-        
-        const url = `${CONFIG.API_URL}?route=hidden&userId=${userId}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        const hiddenWords = data.data || [];
-        
-        // Cache hidden words
-        setCachedData(cacheKey, hiddenWords);
-        
-        return hiddenWords;
-    } catch (error) {
-        console.error('Error fetching hidden words:', error);
-        alert('เกิดข้อผิดพลาดในการโหลดคำที่ซ่อน: ' + error.message);
-        return [];
-    }
-}
-
-async function unhideWord(wordId) {
-    try {
-        // ใช้ GET แทน POST เพื่อหลีกเลี่ยง CORS preflight
-        const url = `${CONFIG.API_URL}?route=unhide&user_id=${userId}&word_id=${wordId}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        // ลบ cache ทั้งหมด
-        localStorage.removeItem(CACHE_KEY + '_' + userId);
-        localStorage.removeItem(CACHE_STATS_KEY + '_' + userId);
-        localStorage.removeItem('flash_hidden_cache_' + userId);
-        
-        return data;
-    } catch (error) {
-        console.error('Error unhiding word:', error);
-        alert('เกิดข้อผิดพลาดในการยกเลิกการซ่อน: ' + error.message);
-        return null;
-    }
-}
-
-// ===================== HANDLERS =====================
-async function handleStart() {
-    const startBtn = document.getElementById('startBtn');
-    startBtn.disabled = true;
-    startBtn.textContent = 'กำลังโหลด...';
-    
-    // ลบ cache ทั้งหมดเพื่อโหลดคำใหม่ล่าสุดจาก API (รวมถึง hidden words)
-    localStorage.removeItem(CACHE_KEY + '_' + userId);
-    localStorage.removeItem(CACHE_STATS_KEY + '_' + userId);
-    localStorage.removeItem('flash_hidden_cache_' + userId);
-    memoryCache.delete(CACHE_KEY + '_' + userId);
-    memoryCache.delete(CACHE_STATS_KEY + '_' + userId);
-    memoryCache.delete('flash_hidden_cache_' + userId);
-    
-    // โหลดแบบ parallel ทั้ง words และ stats จาก API (บังคับ refresh)
-    const [words] = await Promise.all([
-        loadNewWords(true),
-        fetchTotalStats()
-    ]);
-    
-    if (wordPool.length === 0) {
-        alert('ไม่มีคำในระบบ กรุณาเพิ่มข้อมูลในชีต words');
-        startBtn.disabled = false;
-        startBtn.textContent = 'เริ่มสุ่ม';
-        return;
-    }
-    
-    currentWordIndex = 0;
-    
-    // Prefetch คำถัดไป (ถ้ามี) เพื่อลดเวลารอ
-    if (wordPool.length > 1) {
-        prefetchNextCard();
-    }
-    
-    showCard();
-    
-    startBtn.style.display = 'none';
-    document.getElementById('cardActions').style.display = 'flex';
-}
-
-// ฟังก์ชันยิง API เช็คคำใหม่เมื่อคำในกองหมด
-async function reloadAndCheckWords() {
-    // แสดง loading
-    const nextBtn = document.getElementById('nextBtn');
-    const hideBtn = document.getElementById('hideBtn');
-    if (nextBtn) {
-        nextBtn.disabled = true;
-        nextBtn.textContent = '🔄 กำลังโหลด...';
-    }
-    if (hideBtn) hideBtn.disabled = true;
-    
-    // ลบ cache ทั้งหมดเพื่อโหลดคำใหม่ล่าสุดจาก API
-    localStorage.removeItem(CACHE_KEY + '_' + userId);
-    localStorage.removeItem(CACHE_STATS_KEY + '_' + userId);
-    localStorage.removeItem('flash_hidden_cache_' + userId);
-    memoryCache.delete(CACHE_KEY + '_' + userId);
-    memoryCache.delete(CACHE_STATS_KEY + '_' + userId);
-    memoryCache.delete('flash_hidden_cache_' + userId);
-    
-    // ยิง API โหลดคำใหม่ (บังคับ refresh เพื่อเช็คคำที่จำได้แล้ว)
-    const newWords = await fetchWords(true);
-    
-    if (newWords && newWords.length > 0) {
-        // มีคำใหม่! โหลดเข้า wordPool
-        wordPool = shuffleArray(newWords);
-        currentWordIndex = 0;
-        
-        // อัปเดต stats
-        const stats = await fetchTotalStats();
-        if (stats) {
-            totalWordsInSheet = stats.total || 0;
-            hiddenWordsCount = stats.hidden || 0;
-            learnedCount = stats.learned || 0;
-        }
-        updateStats();
-        
-        // แสดงการ์ดใหม่
-        showCard();
-        
-        // รีเซ็ตปุ่ม
-        if (nextBtn) {
-            nextBtn.disabled = false;
-            nextBtn.textContent = '➡️ ถัดไป';
-        }
-        if (hideBtn) hideBtn.disabled = false;
-    } else {
-        // ไม่มีคำเหลือจริงๆ แสดง empty state
-        if (nextBtn) {
-            nextBtn.disabled = false;
-            nextBtn.textContent = '➡️ ถัดไป';
-        }
-        if (hideBtn) hideBtn.disabled = false;
-        showEmptyState();
-    }
-}
-
-// Prefetch คำถัดไป
-function prefetchNextCard() {
-    if (currentWordIndex + 1 < wordPool.length) {
-        const nextWord = wordPool[currentWordIndex + 1];
-        // อาจจะ preload ข้อมูลหรือ prepare DOM ล่วงหน้า
-        // สำหรับตอนนี้ เราเก็บไว้ใน memory แล้ว ก็เร็วอยู่แล้ว
-    }
-}
-
-function handleNext() {
-    // เช็คก่อนว่ายังมีคำถัดไปไหม
-    if (currentWordIndex + 1 >= wordPool.length) {
-        // ไม่มีคำถัดไปในกองแล้ว ยิง API เช็คว่ามีคำใหม่ไหม
-        reloadAndCheckWords();
-        return;
-    }
-    
-    currentWordIndex++;
-    
-    // Prefetch คำถัดไป
-    if (currentWordIndex + 1 < wordPool.length) {
-        prefetchNextCard();
-    }
-    
-    showCard();
-}
-
-async function handleLearnedAndNext() {
-    if (wordPool.length === 0 || currentWordIndex >= wordPool.length) {
-        return;
-    }
-    
-    const currentWord = wordPool[currentWordIndex];
-    
-    // บันทึกไปยัง API
-    await saveWordState(currentWord.id, true, false);
-    
-    // ลบคำออกจาก wordPool
-    wordPool.splice(currentWordIndex, 1);
-    
-    // ดึงข้อมูล stats ล่าสุดจาก API (background)
-    fetchTotalStats().then(stats => {
-        if (stats) {
-            totalWordsInSheet = stats.total || 0;
-            hiddenWordsCount = stats.hidden || 0;
-            learnedCount = stats.learned || 0;
-            updateStats();
-        }
-    });
-    
-    // เช็คว่ายังมีคำเหลือไหม (หลัง splice คำถัดไปจะเลื่อนมาอยู่ที่ index เดิม)
-    if (wordPool.length === 0) {
-        // ยิง API เช็คว่ามีคำใหม่ไหม
-        await reloadAndCheckWords();
-        return;
-    }
-    
-    // ถ้า currentWordIndex เกินขอบเขตหลัง splice ให้กลับไปที่คำสุดท้าย
-    if (currentWordIndex >= wordPool.length) {
-        currentWordIndex = wordPool.length - 1;
-    }
-    
-    // แสดงการ์ดปัจจุบัน (ซึ่งเป็นคำถัดไปที่เลื่อนมาอยู่ที่ index เดิมแล้ว)
-    showCard();
-}
-
-async function handleHideAndNext() {
-    if (wordPool.length === 0 || currentWordIndex >= wordPool.length) {
-        return;
-    }
-    
-    // แสดงสถานะโหลดและปิดปุ่มทั้งหมด
-    const hideBtn = document.getElementById('hideBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const viewHiddenBtn = document.getElementById('viewHiddenBtn');
-    
-    if (hideBtn) {
-        hideBtn.disabled = true;
-        hideBtn.textContent = '🔄 กำลังบันทึก...';
-    }
-    if (nextBtn) nextBtn.disabled = true;
-    if (viewHiddenBtn) viewHiddenBtn.disabled = true;
-    
-    const currentWord = wordPool[currentWordIndex];
-    
-    // อัปเดตตัวเลขแบบ realtime ทันที
-    hiddenWordsCount++;
-    updateStats();
-    
-    try {
-        // บันทึกไปยัง API และรอให้เสร็จ
-        await saveWordState(currentWord.id, false, true);
-        
-        // ถ้า modal คำที่จำได้เปิดอยู่ ให้ยิง API ดึงข้อมูลใหม่
-        const modal = document.getElementById('hiddenModal');
-        if (modal && modal.style.display === 'flex') {
-            // ลบ cache ของ hidden words
-            localStorage.removeItem('flash_hidden_cache_' + userId);
-            memoryCache.delete('flash_hidden_cache_' + userId);
-            // รีโหลด modal
-            await refreshHiddenModal();
-        }
-        
-        // ลบคำออกจาก wordPool
-        wordPool.splice(currentWordIndex, 1);
-        
-        // เช็คว่ายังมีคำเหลือไหม (หลัง splice คำถัดไปจะเลื่อนมาอยู่ที่ index เดิม)
-        if (wordPool.length === 0) {
-            // ยิง API เช็คว่ามีคำใหม่ไหม
-            await reloadAndCheckWords();
-            return;
-        }
-        
-        // ถ้า currentWordIndex เกินขอบเขตหลัง splice ให้กลับไปที่คำสุดท้าย
-        if (currentWordIndex >= wordPool.length) {
-            currentWordIndex = wordPool.length - 1;
-        }
-        
-        // แสดงการ์ดปัจจุบัน (ซึ่งเป็นคำถัดไปที่เลื่อนมาอยู่ที่ index เดิมแล้ว)
-        showCard();
+        await enterApp();
+    } catch (err) {
+        authError(err.message);
     } finally {
-        // คืนสถานะปุ่มกลับ
-        if (hideBtn) {
-            hideBtn.disabled = false;
-            hideBtn.textContent = '✓ จำได้แล้ว';
-        }
-        if (nextBtn) nextBtn.disabled = false;
-        if (viewHiddenBtn) viewHiddenBtn.disabled = false;
+        btn.disabled = false;
+        btn.textContent = label;
     }
 }
 
-// ฟังก์ชันรีเฟรช modal คำที่จำได้แล้ว
-async function refreshHiddenModal() {
-    const listContainer = document.getElementById('hiddenWordsList');
-    if (!listContainer) return;
-    
-    // ยิง API ดึงคำที่จำได้ใหม่
-    const hiddenWords = await getHiddenWords();
-    
-    if (hiddenWords.length === 0) {
-        listContainer.innerHTML = '<p class="empty-message">ไม่มีคำที่ซ่อนไว้</p>';
+function showLogin() {
+    show($('loginScreen'), true);
+    show($('mainApp'), false);
+}
+
+async function enterApp() {
+    show($('loginScreen'), false);
+    show($('mainApp'), true);
+
+    bindAppUI();
+    restorePreferences();
+
+    const [profile] = await Promise.all([api.getProfile(), refreshStats(), loadPosOptions()]);
+    state.profile = profile;
+    $('currentUsername').textContent = profile?.username || '-';
+    $('dailyGoalInput').value = profile?.daily_goal || 20;
+
+    api.flushOutbox().then((n) => { if (n) refreshStats(); });
+}
+
+// ===================== APP UI BINDING =====================
+let bound = false;
+function bindAppUI() {
+    if (bound) return;
+    bound = true;
+
+    document.querySelectorAll('.tab').forEach((tab) =>
+        tab.addEventListener('click', () => switchView(tab.dataset.view)));
+
+    $('logoutBtn').addEventListener('click', async () => {
+        if (!confirm('🚪 ต้องการออกจากระบบใช่หรือไม่?')) return;
+        await api.signOut();
+        location.reload();
+    });
+
+    $('startBtn').addEventListener('click', startSession);
+    $('skipBtn').addEventListener('click', skipCard);
+    $('hideBtn').addEventListener('click', suspendCurrent);
+    $('speakBtn').addEventListener('click', () => speak(currentWord()?.word));
+    $('showTranslationToggle').addEventListener('change', (e) => reveal(e.target.checked));
+
+    $('gradeRow').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-grade]');
+        if (btn) grade(Number(btn.dataset.grade));
+    });
+
+    bindChips('levelChips', (levels) => { state.levels = levels; savePreferences(); startSession(); });
+    bindChips('browseLevelChips', () => runSearch());
+
+    $('posSelect').addEventListener('change', (e) => {
+        state.pos = e.target.value; savePreferences(); startSession();
+    });
+    $('modeSelect').addEventListener('change', (e) => {
+        state.mode = e.target.value; savePreferences(); if (state.queue.length) showCard();
+    });
+
+    $('viewHiddenBtn').addEventListener('click', openSuspendedModal);
+    $('closeModalBtn').addEventListener('click', () => show($('hiddenModal'), false));
+    $('hiddenModal').addEventListener('click', (e) => {
+        if (e.target.id === 'hiddenModal') show($('hiddenModal'), false);
+    });
+    $('hiddenSearch').addEventListener('input', debounce(() => renderSuspended(), 250));
+    $('hiddenWordsList').addEventListener('click', (e) => {
+        const btn = e.target.closest('.btn-unhide');
+        if (btn) unsuspend(btn.dataset.wordId);
+    });
+
+    $('searchInput').addEventListener('input', debounce(() => runSearch(), 250));
+    $('quizOptions').addEventListener('click', (e) => {
+        const btn = e.target.closest('.quiz-option');
+        if (btn) answerQuiz(btn);
+    });
+    $('typingInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') answerTyping(); });
+    $('saveGoalBtn').addEventListener('click', saveGoal);
+
+    document.addEventListener('keydown', onKey);
+}
+
+function bindChips(containerId, onChange) {
+    const box = $(containerId);
+    box.addEventListener('click', (e) => {
+        const chip = e.target.closest('.chip');
+        if (!chip) return;
+        chip.classList.toggle('is-active');
+        onChange(selectedChips(containerId));
+    });
+}
+
+const selectedChips = (id) =>
+    [...$(id).querySelectorAll('.chip.is-active')].map((c) => c.dataset.level);
+
+function onKey(e) {
+    if (!$('hiddenModal').hidden) {
+        if (e.key === 'Escape') show($('hiddenModal'), false);
         return;
     }
-    
-    // ใช้ DocumentFragment สำหรับประสิทธิภาพ
-    const fragment = document.createDocumentFragment();
-    
-    // สร้าง badge
-    const badge = document.createElement('div');
-    badge.className = 'learned-count-badge';
-    badge.innerHTML = `
-        <span class="count-icon">🎯</span>
-        <span class="count-text">จำได้แล้ว</span>
-        <span class="count-number">${hiddenWords.length}</span>
-    `;
-    fragment.appendChild(badge);
-    
-    // สร้าง list container
-    const wordsListDiv = document.createElement('div');
-    wordsListDiv.className = 'hidden-words-list';
-    
-    // สร้าง word items
-    hiddenWords.forEach(word => {
-        const item = document.createElement('div');
-        item.className = 'hidden-word-item';
-        item.setAttribute('data-word-id', word.id);
-        
-        const wordInfo = document.createElement('div');
-        wordInfo.className = 'word-info';
-        wordInfo.innerHTML = `
-            <strong>${word.word}</strong>
-            <span class="translation-small">${word.translation}</span>
-        `;
-        
-        const btn = document.createElement('button');
-        btn.className = 'btn btn-unhide';
-        btn.textContent = 'ยกเลิกการจำ';
-        btn.setAttribute('data-word-id', word.id);
-        
-        item.appendChild(wordInfo);
-        item.appendChild(btn);
-        wordsListDiv.appendChild(item);
+    if (e.target.matches('input, select, textarea')) return;
+    if ($('mainApp').hidden || $('studyView').hidden || !state.queue.length) return;
+
+    if (e.key === ' ') { e.preventDefault(); reveal(!state.revealed); }
+    else if (e.key.toLowerCase() === 's') speak(currentWord()?.word);
+    else if (e.key.toLowerCase() === 'n') skipCard();
+    else if (['1', '2', '3', '4'].includes(e.key) && state.mode === 'flip' && state.revealed) {
+        grade([1, 3, 4, 5][Number(e.key) - 1]);
+    }
+}
+
+// ===================== VIEWS =====================
+function switchView(view) {
+    document.querySelectorAll('.tab').forEach((t) =>
+        t.classList.toggle('is-active', t.dataset.view === view));
+    show($('studyView'), view === 'study');
+    show($('browseView'), view === 'browse');
+    show($('statsView'), view === 'stats');
+
+    if (view === 'stats') renderStats();
+    if (view === 'browse' && !$('browseResults').childElementCount) runSearch();
+}
+
+// ===================== PREFERENCES =====================
+function savePreferences() {
+    try {
+        localStorage.setItem('flash_prefs', JSON.stringify({
+            levels: state.levels, pos: state.pos, mode: state.mode
+        }));
+    } catch { /* ignore */ }
+}
+
+function restorePreferences() {
+    let prefs = {};
+    try { prefs = JSON.parse(localStorage.getItem('flash_prefs') || '{}'); } catch { /* ignore */ }
+    state.levels = prefs.levels || [];
+    state.pos = prefs.pos || '';
+    state.mode = prefs.mode || 'flip';
+    $('modeSelect').value = state.mode;
+    state.levels.forEach((lv) => {
+        const chip = $('levelChips').querySelector(`[data-level="${lv}"]`);
+        if (chip) chip.classList.add('is-active');
     });
-    
-    fragment.appendChild(wordsListDiv);
-    
-    // อัปเดต DOM ครั้งเดียว
-    listContainer.innerHTML = '';
-    listContainer.appendChild(fragment);
 }
 
-function handleTranslationToggle(e) {
-    const translationContent = document.getElementById('translationContent');
-    
-    if (e.target.checked) {
-        translationContent.style.display = 'block';
-    } else {
-        translationContent.style.display = 'none';
+async function loadPosOptions() {
+    try {
+        const list = await api.getPosList();
+        const sel = $('posSelect');
+        list.forEach((row) => {
+            const opt = document.createElement('option');
+            opt.value = row.pos;
+            opt.textContent = `${row.pos} (${row.n})`;
+            sel.appendChild(opt);
+        });
+        sel.value = state.pos;
+    } catch { /* filter stays "ทั้งหมด" */ }
+}
+
+// ===================== STUDY SESSION =====================
+const currentWord = () => state.queue[state.index];
+
+async function startSession() {
+    const btn = $('startBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ กำลังโหลด...';
+
+    try {
+        const [queue] = await Promise.all([
+            api.getQueue({ levels: state.levels, pos: state.pos ? [state.pos] : null }),
+            refreshStats()
+        ]);
+        state.queue = queue;
+        state.index = 0;
+
+        if (!queue.length) return showEmpty();
+
+        show($('startBtn'), false);
+        show($('cardActions'), true);
+        showCard();
+    } catch (err) {
+        toast('โหลดคำไม่สำเร็จ: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🚀 เริ่มทบทวน';
     }
-}
-
-// ===================== HIDDEN WORDS MODAL =====================
-async function openHiddenModal() {
-    const modal = document.getElementById('hiddenModal');
-    const listContainer = document.getElementById('hiddenWordsList');
-    
-    modal.style.display = 'flex';
-    
-    // แสดง skeleton loading แทน
-    listContainer.innerHTML = `
-        <div class="loading-skeleton">
-            <div class="skeleton-item"></div>
-            <div class="skeleton-item"></div>
-            <div class="skeleton-item"></div>
-        </div>
-    `;
-    
-    // ลบ cache เพื่อยิง API ใหม่ทุกครั้งที่เปิด modal
-    localStorage.removeItem('flash_hidden_cache_' + userId);
-    memoryCache.delete('flash_hidden_cache_' + userId);
-    
-    const hiddenWords = await getHiddenWords();
-    
-    if (hiddenWords.length === 0) {
-        listContainer.innerHTML = '<p class="empty-message">ไม่มีคำที่ซ่อนไว้</p>';
-        return;
-    }
-    
-    // ใช้ DocumentFragment สำหรับประสิทธิภาพ
-    const fragment = document.createDocumentFragment();
-    
-    // สร้าง badge
-    const badge = document.createElement('div');
-    badge.className = 'learned-count-badge';
-    badge.innerHTML = `
-        <span class="count-icon">🎯</span>
-        <span class="count-text">จำได้แล้ว</span>
-        <span class="count-number">${hiddenWords.length}</span>
-    `;
-    fragment.appendChild(badge);
-    
-    // สร้าง list container
-    const wordsListDiv = document.createElement('div');
-    wordsListDiv.className = 'hidden-words-list';
-    
-    // สร้าง word items - ไม่ใช้ inline event handlers
-    hiddenWords.forEach(word => {
-        const item = document.createElement('div');
-        item.className = 'hidden-word-item';
-        item.setAttribute('data-word-id', word.id);
-        
-        const wordInfo = document.createElement('div');
-        wordInfo.className = 'word-info';
-        wordInfo.innerHTML = `
-            <strong>${word.word}</strong>
-            <span class="translation-small">${word.translation}</span>
-        `;
-        
-        const btn = document.createElement('button');
-        btn.className = 'btn btn-unhide';
-        btn.textContent = 'ยกเลิกการจำ';
-        btn.setAttribute('data-word-id', word.id);
-        
-        item.appendChild(wordInfo);
-        item.appendChild(btn);
-        wordsListDiv.appendChild(item);
-    });
-    
-    fragment.appendChild(wordsListDiv);
-    
-    // อัปเดต DOM ครั้งเดียว
-    listContainer.innerHTML = '';
-    listContainer.appendChild(fragment);
-}
-
-function closeHiddenModal() {
-    document.getElementById('hiddenModal').style.display = 'none';
-}
-
-async function handleUnhide(wordId) {
-    const result = await unhideWord(wordId);
-    
-    if (result && result.ok) {
-        // ลบออกจาก UI
-        const item = document.querySelector(`[data-word-id="${wordId}"]`);
-        if (item) {
-            item.remove();
-        }
-        
-        // อัปเดต hiddenWordsCount แบบ realtime
-        if (hiddenWordsCount > 0) {
-            hiddenWordsCount--;
-        }
-        
-        // เช็คว่าเหลือคำไหมใน modal
-        const remainingItems = document.querySelectorAll('.hidden-word-item');
-        const badge = document.querySelector('.learned-count-badge .count-number');
-        
-        if (remainingItems.length === 0) {
-            document.getElementById('hiddenWordsList').innerHTML = 
-                '<p class="empty-message">ไม่มีคำที่จำได้</p>';
-        } else if (badge) {
-            // อัปเดทจำนวนในป้าย badge แบบ realtime
-            badge.textContent = hiddenWordsCount;
-        }
-        
-        // อัปเดต stats ทั้งหมดแบบ realtime
-        updateStats();
-    }
-}
-
-// ===================== UI UPDATE =====================
-async function loadNewWords(forceRefresh = false) {
-    // ดึงสถิติทั้งหมดจาก API
-    const stats = await fetchTotalStats();
-    totalWordsInSheet = stats.total || 0;
-    hiddenWordsCount = stats.hidden || 0;
-    learnedCount = stats.learned || 0;
-    
-    // ดึงคำจาก API (ใช้ forceRefresh เพื่อเช็คคำที่จำได้แล้ว)
-    wordPool = await fetchWords(forceRefresh);
-    
-    // สุ่มคำใหม่ทุกครั้งเพื่อไม่ให้ซ้ำ
-    wordPool = shuffleArray(wordPool);
-    
-    currentWordIndex = 0;
-    updateStats();
-    
-    // เช็ค empty state อย่างถูกต้อง
-    if (wordPool.length === 0) {
-        showEmptyState();
-    } else {
-        hideEmptyState();
-    }
-    
-    return wordPool;
 }
 
 function showCard() {
-    // เช็คก่อนว่ามีคำเหลือไหม
-    if (wordPool.length === 0 || currentWordIndex >= wordPool.length) {
-        showEmptyState();
+    const card = currentWord();
+    if (!card) return reloadQueue();
+
+    show($('flashcard'), true);
+    show($('emptyState'), false);
+
+    const word = card.word || '-';
+    const wordEl = $('word');
+    wordEl.textContent = word.charAt(0).toUpperCase() + word.slice(1);
+    wordEl.removeAttribute('data-length');
+    if (word.length > 15) wordEl.dataset.length = 'extra-long';
+    else if (word.length > 12) wordEl.dataset.length = 'very-long';
+    else if (word.length > 8) wordEl.dataset.length = 'long';
+
+    setTag($('posTag'), card.pos);
+    setTag($('levelTag'), card.level);
+    $('pronunciationText').textContent = card.pronunciation || '—';
+    $('translationText').textContent = card.translation || '—';
+    $('cardSchedule').textContent = card.is_new
+        ? '✨ คำใหม่'
+        : `ทบทวนครั้งที่ ${card.repetitions} · ช่วงห่าง ${card.interval_days} วัน`;
+
+    // grade buttons show what each answer will do to the schedule
+    document.querySelectorAll('[data-hint]').forEach((el) => {
+        const g = Number(el.dataset.hint);
+        el.textContent = formatInterval(previewInterval(card, g));
+    });
+
+    state.revealed = false;
+    $('showTranslationToggle').checked = false;
+    show($('translationContent'), false);
+    show($('gradeRow'), state.mode === 'flip');
+    show($('flipControls'), state.mode === 'flip');
+    show($('quizOptions'), state.mode === 'quiz');
+    show($('typingBox'), state.mode === 'typing');
+    $('typingInput').value = '';
+    $('typingFeedback').textContent = '';
+
+    if (state.mode === 'quiz') buildQuiz(card);
+    if (state.mode === 'typing') $('typingInput').focus();
+}
+
+function setTag(el, value) {
+    el.textContent = value || '';
+    el.style.display = value ? 'inline-block' : 'none';
+}
+
+function reveal(on) {
+    state.revealed = on;
+    $('showTranslationToggle').checked = on;
+    show($('translationContent'), on);
+}
+
+async function grade(value) {
+    if (state.answering) return;
+    const card = currentWord();
+    if (!card) return;
+
+    state.answering = true;
+    // optimistic: the card leaves the queue immediately, the write happens behind it
+    const wordId = card.id;
+    advance();
+
+    try {
+        await api.reviewCardResilient(wordId, value, state.mode);
+        bumpToday();
+    } catch {
+        setConn(false);
+        toast('ออฟไลน์ — เก็บผลไว้ส่งทีหลังแล้ว');
+    } finally {
+        state.answering = false;
+    }
+    debouncedStats();
+}
+
+/** Drop the current card from the session — it has been answered. */
+function advance() {
+    state.queue.splice(state.index, 1);
+    if (state.index >= state.queue.length) state.index = 0;
+    if (!state.queue.length) return reloadQueue();
+    showCard();
+}
+
+/** Skip: no grade recorded, the card goes to the back of the session. */
+function skipCard() {
+    if (state.queue.length < 2) return;
+    const [card] = state.queue.splice(state.index, 1);
+    state.queue.push(card);
+    if (state.index >= state.queue.length) state.index = 0;
+    showCard();
+}
+
+async function reloadQueue() {
+    const queue = await api.getQueue({
+        levels: state.levels, pos: state.pos ? [state.pos] : null
+    }).catch(() => []);
+    state.queue = queue;
+    state.index = 0;
+    await refreshStats();
+    if (queue.length) showCard(); else showEmpty();
+}
+
+function showEmpty() {
+    show($('flashcard'), false);
+    show($('emptyState'), true);
+    show($('cardActions'), false);
+    show($('startBtn'), true);
+    $('startBtn').textContent = '🔄 โหลดใหม่';
+
+    const anyFilter = state.levels.length || state.pos;
+    $('emptyTitle').textContent = anyFilter ? 'ไม่มีคำตามตัวกรองนี้' : 'ทบทวนครบแล้ววันนี้!';
+    $('emptySub').textContent = anyFilter
+        ? 'ลองเอาตัวกรองระดับหรือชนิดคำออก'
+        : 'กลับมาใหม่เมื่อถึงรอบทบทวนถัดไป';
+}
+
+async function suspendCurrent() {
+    const card = currentWord();
+    if (!card) return;
+    const btn = $('hideBtn');
+    btn.disabled = true;
+    try {
+        await api.setSuspended(card.id, true);
+        if (state.stats) { state.stats.suspended++; renderStudyStats(); }
+        advance();
+    } catch (err) {
+        toast('บันทึกไม่สำเร็จ: ' + err.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// ===================== QUIZ MODE =====================
+async function buildQuiz(card) {
+    const box = $('quizOptions');
+    box.innerHTML = '<p class="loading">กำลังเตรียมตัวเลือก...</p>';
+    let options = [];
+    try {
+        options = await api.getQuizOptions(card.id);
+    } catch { /* fall back to a plain reveal below */ }
+
+    if (currentWord()?.id !== card.id) return; // user moved on while loading
+
+    if (!options.length || !card.translation) {
+        box.innerHTML = '';
+        show($('gradeRow'), true);
+        reveal(true);
         return;
     }
-    
-    const currentWord = wordPool[currentWordIndex];
-    
-    // ป้องกันถ้า currentWord เป็น undefined
-    if (!currentWord) {
-        console.error('No current word at index:', currentWordIndex, 'Pool length:', wordPool.length);
-        showEmptyState();
+
+    const choices = shuffle([
+        { text: card.translation, correct: true },
+        ...options.map((o) => ({ text: o.translation, correct: false }))
+    ]);
+
+    box.innerHTML = '';
+    choices.forEach((c) => {
+        const btn = document.createElement('button');
+        btn.className = 'quiz-option';
+        btn.textContent = c.text;
+        btn.dataset.correct = String(c.correct);
+        box.appendChild(btn);
+    });
+}
+
+function answerQuiz(btn) {
+    if (btn.closest('.quiz-options').classList.contains('is-answered')) return;
+    const box = $('quizOptions');
+    box.classList.add('is-answered');
+
+    const correct = btn.dataset.correct === 'true';
+    box.querySelectorAll('.quiz-option').forEach((el) => {
+        if (el.dataset.correct === 'true') el.classList.add('is-correct');
+        else if (el === btn) el.classList.add('is-wrong');
+    });
+
+    setTimeout(() => {
+        box.classList.remove('is-answered');
+        grade(correct ? 4 : 1);
+    }, correct ? 550 : 1400);
+}
+
+// ===================== TYPING MODE =====================
+function answerTyping() {
+    const card = currentWord();
+    if (!card) return;
+    const input = $('typingInput');
+    const guess = normalise(input.value);
+    if (!guess) return;
+
+    const answers = (card.translation || '').split(/[\/,;|]/).map(normalise).filter(Boolean);
+    const correct = answers.some((a) => a === guess || (a.length > 3 && a.includes(guess)));
+
+    $('typingFeedback').textContent = correct
+        ? '✅ ถูกต้อง'
+        : `❌ คำตอบคือ ${card.translation || '—'}`;
+    $('typingFeedback').className = 'typing-feedback ' + (correct ? 'is-correct' : 'is-wrong');
+
+    input.disabled = true;
+    setTimeout(() => {
+        input.disabled = false;
+        grade(correct ? 4 : 1);
+    }, correct ? 700 : 1800);
+}
+
+const normalise = (s) => (s || '').toLowerCase().replace(/[\s.()"'’]/g, '').trim();
+
+// ===================== SM-2 PREVIEW =====================
+// Mirrors public.sm2_next in supabase/migrations/0002_sm2_rpc.sql — display only.
+// The database is always the authority; this just labels the buttons.
+function previewInterval(card, grade) {
+    const ef = Math.max(1.3, Number(card.ease_factor || 2.5) +
+        (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02)));
+    const reps = Number(card.repetitions || 0);
+    if (grade < 3) return 1;
+    if (reps <= 0) return 1;
+    if (reps === 1) return 6;
+    return Math.max(1, Math.round(Number(card.interval_days || 0) * ef));
+}
+
+function formatInterval(days) {
+    if (days < 1) return '<1 วัน';
+    if (days === 1) return 'พรุ่งนี้';
+    if (days < 30) return `${days} วัน`;
+    if (days < 365) return `${Math.round(days / 30)} เดือน`;
+    return `${(days / 365).toFixed(1)} ปี`;
+}
+
+// ===================== STATS =====================
+const debouncedStats = debounce(() => refreshStats(), 1200);
+
+async function refreshStats() {
+    try {
+        state.stats = await api.getStats();
+        renderStudyStats();
+        if (!$('statsView').hidden) renderStats();
+        setConn(true);
+    } catch {
+        setConn(false);
+    }
+}
+
+function bumpToday() {
+    if (!state.stats) return;
+    state.stats.today = (state.stats.today || 0) + 1;
+    renderStudyStats();
+}
+
+function renderStudyStats() {
+    const s = state.stats;
+    if (!s) return;
+    $('dueCount').textContent = s.due_now ?? 0;
+    $('remainingCount').textContent = Math.max(0, s.remaining ?? 0);
+    $('hiddenWordsCount').textContent = s.suspended ?? 0;
+    $('streakCount').textContent = s.streak ?? 0;
+
+    const goal = s.daily_goal || 20;
+    const done = s.today || 0;
+    $('goalFill').style.width = Math.min(100, (done / goal) * 100) + '%';
+    $('goalText').textContent = `วันนี้ ${done} / ${goal} คำ` + (done >= goal ? ' 🎉' : '');
+}
+
+function renderStats() {
+    const s = state.stats;
+    if (!s) return;
+    $('sLearning').textContent = s.learning ?? 0;
+    $('sReview').textContent = s.in_review ?? 0;
+    $('sMastered').textContent = s.mastered ?? 0;
+    $('sSuspended').textContent = s.suspended ?? 0;
+    $('sStreak').textContent = s.streak ?? 0;
+    $('sToday').textContent = s.today ?? 0;
+
+    renderLevelBars(s.by_level || {});
+    renderHeatmap(s.heatmap || {});
+}
+
+// Oxford 3000 only reaches B2; anything else lands in "อื่นๆ".
+const LEVEL_TOTALS = { A1: 751, A2: 751, B1: 767, B2: 727 };
+
+function renderLevelBars(byLevel) {
+    const box = $('levelBars');
+    box.innerHTML = '';
+    Object.entries(LEVEL_TOTALS).forEach(([level, total]) => {
+        const done = byLevel[level] || 0;
+        const pct = Math.min(100, Math.round((done / total) * 100));
+        const row = document.createElement('div');
+        row.className = 'level-bar';
+        row.innerHTML = `
+            <span class="level-bar-name">${level}</span>
+            <span class="level-bar-track"><span class="level-bar-fill" style="width:${pct}%"></span></span>
+            <span class="level-bar-value">${done}/${total}</span>`;
+        box.appendChild(row);
+    });
+}
+
+function renderHeatmap(map) {
+    const box = $('heatmap');
+    box.innerHTML = '';
+
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(start.getDate() - 363);
+    start.setDate(start.getDate() - start.getDay()); // align to Sunday
+
+    const frag = document.createDocumentFragment();
+    for (let week = 0; week < 53; week++) {
+        const col = document.createElement('div');
+        col.className = 'hm-week';
+        for (let day = 0; day < 7; day++) {
+            const d = new Date(start);
+            d.setDate(start.getDate() + week * 7 + day);
+            const cell = document.createElement('i');
+            if (d > today) {
+                cell.className = 'hm-future';
+            } else {
+                const key = d.toISOString().slice(0, 10);
+                const n = map[key] || 0;
+                cell.className = 'hm-' + (n === 0 ? 0 : n < 5 ? 1 : n < 15 ? 2 : n < 35 ? 3 : 4);
+                cell.title = `${key} · ${n} คำ`;
+            }
+            col.appendChild(cell);
+        }
+        frag.appendChild(col);
+    }
+    box.appendChild(frag);
+}
+
+async function saveGoal() {
+    const goal = Number($('dailyGoalInput').value);
+    if (!goal || goal < 1 || goal > 500) return toast('เป้าหมายต้องอยู่ระหว่าง 1–500');
+    try {
+        await api.saveDailyGoal(goal);
+        if (state.stats) state.stats.daily_goal = goal;
+        renderStudyStats();
+        toast('บันทึกเป้าหมายแล้ว');
+    } catch (err) {
+        toast('บันทึกไม่สำเร็จ: ' + err.message);
+    }
+}
+
+// ===================== BROWSE =====================
+async function runSearch() {
+    const box = $('browseResults');
+    const query = $('searchInput').value.trim();
+    const levels = selectedChips('browseLevelChips');
+    box.innerHTML = '<p class="loading">กำลังค้นหา...</p>';
+
+    let rows = [];
+    try {
+        rows = await api.searchWords(query, levels);
+    } catch (err) {
+        box.innerHTML = `<p class="empty-message">ค้นหาไม่สำเร็จ: ${err.message}</p>`;
         return;
     }
-    
-    // Cache DOM elements
-    const wordElement = document.getElementById('word');
-    const posTag = document.getElementById('posTag');
-    const levelTag = document.getElementById('levelTag');
-    const pronunciationText = document.getElementById('pronunciationText');
-    const translationText = document.getElementById('translationText');
-    const showTranslationToggle = document.getElementById('showTranslationToggle');
-    const translationContent = document.getElementById('translationContent');
-    
-    // Batch DOM updates
-    requestAnimationFrame(() => {
-        // แสดงคำหลัก (ทำให้ตัวอักษรตัวแรกเป็นตัวใหญ่)
-        const word = currentWord.word || '-';
-        const capitalizedWord = word.charAt(0).toUpperCase() + word.slice(1);
-        wordElement.textContent = capitalizedWord;
-        
-        // Auto-scale font based on word length
-        const wordLength = (currentWord.word || '').length;
-        wordElement.removeAttribute('data-length');
-        if (wordLength > 15) {
-            wordElement.setAttribute('data-length', 'extra-long');
-        } else if (wordLength > 12) {
-            wordElement.setAttribute('data-length', 'very-long');
-        } else if (wordLength > 8) {
-            wordElement.setAttribute('data-length', 'long');
-        }
-        
-        // แสดง POS (Parts of Speech)
-        if (posTag) {
-            posTag.textContent = currentWord.pos || '-';
-            posTag.style.display = currentWord.pos ? 'inline-block' : 'none';
-        }
-        
-        // แสดง Level
-        if (levelTag) {
-            levelTag.textContent = currentWord.level || '-';
-            levelTag.style.display = currentWord.level ? 'inline-block' : 'none';
-        }
-        
-        // แสดง Pronunciation
-        if (pronunciationText) {
-            pronunciationText.textContent = currentWord.pronunciation || '-';
-        }
-        
-        // แสดงคำแปล
-        if (translationText) {
-            translationText.textContent = currentWord.translation || '-';
-        }
-        
-        // รีเซ็ต translation toggle (ปิดทุกครั้ง)
-        if (showTranslationToggle) {
-            showTranslationToggle.checked = false;
-        }
-        if (translationContent) {
-            translationContent.style.display = 'none';
-        }
+
+    if (!rows.length) {
+        box.innerHTML = '<p class="empty-message">ไม่พบคำที่ตรงกับการค้นหา</p>';
+        return;
+    }
+
+    const frag = document.createDocumentFragment();
+    rows.forEach((row) => {
+        const item = document.createElement('div');
+        item.className = 'word-row';
+        item.innerHTML = `
+            <div class="word-row-main">
+                <strong>${escapeHtml(row.word)}</strong>
+                <span class="translation-small">${escapeHtml(row.translation || '—')}</span>
+            </div>
+            <div class="word-row-meta">
+                ${row.level ? `<span class="level-tag">${row.level}</span>` : ''}
+                <span class="status-badge status-${row.status}">${STATUS_TH[row.status] || row.status}</span>
+            </div>`;
+        frag.appendChild(item);
     });
-    
-    hideEmptyState();
-    updateStats();
+    box.innerHTML = '';
+    box.appendChild(frag);
 }
 
-function showEmptyState() {
-    document.getElementById('flashcard').style.display = 'none';
-    document.getElementById('emptyState').style.display = 'block';
-    document.getElementById('cardActions').style.display = 'none';
-    
-    // แสดงปุ่มเริ่มใหม่
-    const startBtn = document.getElementById('startBtn');
-    if (startBtn) {
-        startBtn.style.display = 'block';
-        startBtn.disabled = false;
-        startBtn.textContent = '🔄 โหลดคำใหม่';
+const STATUS_TH = {
+    new: 'ยังไม่เรียน', learning: 'กำลังเรียน', review: 'ทบทวน',
+    mastered: 'แม่นแล้ว', suspended: 'จำได้แล้ว'
+};
+
+// ===================== SUSPENDED MODAL =====================
+async function openSuspendedModal() {
+    show($('hiddenModal'), true);
+    $('hiddenSearch').value = '';
+    await renderSuspended();
+}
+
+async function renderSuspended() {
+    const box = $('hiddenWordsList');
+    box.innerHTML = `<div class="loading-skeleton">
+        <div class="skeleton-item"></div><div class="skeleton-item"></div><div class="skeleton-item"></div>
+    </div>`;
+
+    let words = [];
+    try {
+        words = await api.getSuspendedWords($('hiddenSearch').value.trim());
+    } catch (err) {
+        box.innerHTML = `<p class="empty-message">โหลดไม่สำเร็จ: ${err.message}</p>`;
+        return;
+    }
+
+    if (!words.length) {
+        box.innerHTML = '<p class="empty-message">ไม่มีคำในรายการนี้</p>';
+        return;
+    }
+
+    const frag = document.createDocumentFragment();
+    const badge = document.createElement('div');
+    badge.className = 'learned-count-badge';
+    badge.innerHTML = `<span class="count-icon">🎯</span>
+        <span class="count-text">จำได้แล้ว</span>
+        <span class="count-number">${words.length}</span>`;
+    frag.appendChild(badge);
+
+    const list = document.createElement('div');
+    list.className = 'hidden-words-list';
+    words.forEach((w) => {
+        const item = document.createElement('div');
+        item.className = 'hidden-word-item';
+        item.dataset.wordId = w.id;
+        item.innerHTML = `
+            <div class="word-info">
+                <strong>${escapeHtml(w.word)}</strong>
+                <span class="translation-small">${escapeHtml(w.translation || '—')}</span>
+            </div>
+            <button class="btn btn-unhide" data-word-id="${w.id}">ยกเลิกการจำ</button>`;
+        list.appendChild(item);
+    });
+    frag.appendChild(list);
+
+    box.innerHTML = '';
+    box.appendChild(frag);
+}
+
+async function unsuspend(wordId) {
+    try {
+        await api.setSuspended(wordId, false);
+        const item = $('hiddenWordsList').querySelector(`.hidden-word-item[data-word-id="${wordId}"]`);
+        if (item) item.remove();
+        if (state.stats && state.stats.suspended > 0) state.stats.suspended--;
+        renderStudyStats();
+
+        const badge = document.querySelector('.learned-count-badge .count-number');
+        const left = $('hiddenWordsList').querySelectorAll('.hidden-word-item').length;
+        if (badge) badge.textContent = left;
+        if (!left) $('hiddenWordsList').innerHTML = '<p class="empty-message">ไม่มีคำในรายการนี้</p>';
+    } catch (err) {
+        toast('ยกเลิกไม่สำเร็จ: ' + err.message);
     }
 }
 
-function hideEmptyState() {
-    document.getElementById('flashcard').style.display = 'block';
-    document.getElementById('emptyState').style.display = 'none';
+// ===================== SPEECH =====================
+let englishVoice = null;
+
+function pickVoice() {
+    if (englishVoice || !window.speechSynthesis) return englishVoice;
+    const voices = speechSynthesis.getVoices();
+    englishVoice = voices.find((v) => /en[-_](GB|US)/i.test(v.lang) && /google|natural|premium/i.test(v.name))
+        || voices.find((v) => /^en[-_]/i.test(v.lang))
+        || null;
+    return englishVoice;
 }
 
-// Batch update stats with requestAnimationFrame for better performance
-let statsUpdateScheduled = false;
-
-function updateStats() {
-    if (statsUpdateScheduled) return;
-    
-    statsUpdateScheduled = true;
-    requestAnimationFrame(() => {
-        // แสดงจำนวนคำทั้งหมดที่เหลือในระบบ (ไม่นับคำที่ซ่อนหรือจำได้แล้ว)
-        const remainingInSystem = totalWordsInSheet - hiddenWordsCount - learnedCount;
-        document.getElementById('remainingCount').textContent = Math.max(0, remainingInSystem);
-        
-        // แสดงจำนวนคำที่จำได้แล้วจาก API
-        const hiddenWordsCountElement = document.getElementById('hiddenWordsCount');
-        if (hiddenWordsCountElement) {
-            hiddenWordsCountElement.textContent = hiddenWordsCount;
-        }
-        statsUpdateScheduled = false;
-    });
+if (window.speechSynthesis) {
+    speechSynthesis.onvoiceschanged = () => { englishVoice = null; pickVoice(); };
 }
 
-function updateUI() {
-    updateStats();
+function speak(text) {
+    if (!text || !window.speechSynthesis) return;
+    // "bank (money)" is a disambiguator for the reader, not something to say
+    const spoken = text.replace(/\s*\([^)]*\)/g, '').trim();
+    if (!spoken) return;
+    speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(spoken);
+    const voice = pickVoice();
+    if (voice) utter.voice = voice;
+    utter.lang = voice?.lang || 'en-US';
+    utter.rate = 0.9;
+    speechSynthesis.speak(utter);
 }
 
 // ===================== UTILITIES =====================
-// Fisher-Yates shuffle - optimized
-function shuffleArray(array) {
+function setConn(ok) {
+    const el = $('connStatus');
+    const pending = api.outboxSize();
+    el.className = ok ? 'conn-ok' : 'conn-off';
+    el.textContent = ok
+        ? 'เชื่อมต่อแล้ว'
+        : `ออฟไลน์${pending ? ` · ค้างส่ง ${pending}` : ''}`;
+}
+
+let toastTimer = null;
+function toast(message) {
+    const el = $('toast');
+    el.textContent = message;
+    show(el, true);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => show(el, false), 3200);
+}
+
+function debounce(fn, wait) {
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), wait);
+    };
+}
+
+function shuffle(array) {
     const arr = [...array];
     for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -1024,15 +817,7 @@ function shuffleArray(array) {
     return arr;
 }
 
-// Debounce utility
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
+function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

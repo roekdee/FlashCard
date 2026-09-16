@@ -2,13 +2,18 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#f5f5f0">
+    <meta name="description" content="เรียนคำศัพท์ Oxford 3000 ด้วยระบบทบทวนแบบเว้นช่วง (SM-2)">
     <title>Oxford 3000 Flashcards</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="word-meta-styles.css">
+    <link rel="stylesheet" href="app-styles.css">
 </head>
 <body>
-    <!-- Login Screen -->
+    <!-- ===================== LOGIN ===================== -->
     <div id="loginScreen" class="login-screen">
         <div class="login-container">
             <div class="login-header">
@@ -16,22 +21,27 @@
                 <p>Flashcards</p>
             </div>
             <div class="login-form">
-                <h2>เข้าสู่ระบบ</h2>
+                <h2 id="authTitle">เข้าสู่ระบบ</h2>
                 <div class="input-group">
                     <label for="username">👤 ชื่อผู้ใช้</label>
-                    <input type="text" id="username" placeholder="กรอกชื่อผู้ใช้">
+                    <input type="text" id="username" autocomplete="username" placeholder="กรอกชื่อผู้ใช้">
                 </div>
                 <div class="input-group">
                     <label for="password">🔒 รหัสผ่าน</label>
-                    <input type="password" id="password" placeholder="กรอกรหัสผ่าน">
+                    <input type="password" id="password" autocomplete="current-password" placeholder="กรอกรหัสผ่าน">
                 </div>
+                <p class="auth-error" id="authError" hidden></p>
                 <button id="loginBtn" class="btn btn-primary btn-large">🚀 เข้าสู่ระบบ</button>
-                <p class="login-hint">💡 ใช้ชื่อผู้ใช้และรหัสผ่านเดียวกันในครั้งถัดไป</p>
+                <p class="login-hint">
+                    <span id="authSwitchText">ยังไม่มีบัญชี?</span>
+                    <button type="button" class="link-btn" id="authSwitchBtn">สมัครสมาชิก</button>
+                </p>
             </div>
         </div>
     </div>
 
-    <div class="container" id="mainApp" style="display: none;">
+    <!-- ===================== APP ===================== -->
+    <div class="container" id="mainApp" hidden>
         <header>
             <div class="header-content">
                 <div>
@@ -39,89 +49,215 @@
                     <p class="subtitle">เรียนรู้คำศัพท์อย่างง่ายดาย</p>
                 </div>
                 <div class="header-actions">
-                    <button id="viewHiddenBtn" class="btn btn-view-hidden">
-                        🎯 คำที่จำได้แล้ว
-                    </button>
-                    <button id="logoutBtn" class="btn btn-logout">
-                        👋 ออกจากระบบ
-                    </button>
+                    <button id="viewHiddenBtn" class="btn btn-view-hidden">🎯 คำที่จำได้แล้ว</button>
+                    <button id="logoutBtn" class="btn btn-logout">👋 ออกจากระบบ</button>
                 </div>
             </div>
         </header>
 
-        <!-- Stats Section -->
-        <section class="stats">
-            <div class="stat-item">
-                <span class="stat-label">📚 เหลือในกองสุ่ม</span>
-                <span class="stat-value" id="remainingCount">0</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">🎯 จำได้แล้ว</span>
-                <span class="stat-value" id="hiddenWordsCount">0</span>
-            </div>
-        </section>
+        <!-- Tabs -->
+        <nav class="tabs" role="tablist">
+            <button class="tab is-active" data-view="study" role="tab">📖 ทบทวน</button>
+            <button class="tab" data-view="browse" role="tab">🔍 ค้นหาคำ</button>
+            <button class="tab" data-view="stats" role="tab">📊 สถิติ</button>
+        </nav>
 
-        <!-- Flashcard -->
-        <section class="flashcard-container" id="flashcardContainer">
-            <div class="flashcard" id="flashcard">
-                <div class="card-front">
-                    <h2 class="word" id="word">-</h2>
-                    <div class="word-meta">
-                        <span class="pos-tag" id="posTag">-</span>
-                        <span class="level-tag" id="levelTag">-</span>
-                    </div>
+        <!-- ============ STUDY VIEW ============ -->
+        <div id="studyView" class="view">
+            <section class="stats">
+                <div class="stat-item">
+                    <span class="stat-label">⏰ ถึงกำหนดทบทวน</span>
+                    <span class="stat-value" id="dueCount">0</span>
                 </div>
-                
-                <!-- Translation Toggle -->
-                <div class="translation-section">
-                    <label class="switch">
-                        <input type="checkbox" id="showTranslationToggle">
-                        <span class="slider"></span>
-                    </label>
-                    <span class="toggle-label">💬 แสดงคำแปล</span>
+                <div class="stat-item">
+                    <span class="stat-label">📚 เหลือในกองสุ่ม</span>
+                    <span class="stat-value" id="remainingCount">0</span>
                 </div>
-                
-                <!-- Translation Content (hidden by default) -->
-                <div class="translation-content" id="translationContent" style="display: none;">
-                    <div class="translation">
-                        <strong>🔊 Pronunciation:</strong> 
-                        <p id="pronunciationText">-</p>
-                    </div>
-                    <div class="translation">
-                        <strong>💬 Meaning:</strong> 
-                        <p id="translationText">-</p>
-                    </div>
+                <div class="stat-item">
+                    <span class="stat-label">🎯 จำได้แล้ว</span>
+                    <span class="stat-value" id="hiddenWordsCount">0</span>
                 </div>
+                <div class="stat-item">
+                    <span class="stat-label">🔥 ต่อเนื่อง</span>
+                    <span class="stat-value" id="streakCount">0</span>
+                </div>
+            </section>
+
+            <!-- daily goal -->
+            <div class="goal-bar" id="goalBar">
+                <div class="goal-bar-track"><div class="goal-bar-fill" id="goalFill"></div></div>
+                <span class="goal-bar-text" id="goalText">วันนี้ 0 / 20 คำ</span>
             </div>
 
-            <!-- Empty State -->
-            <div class="empty-state" id="emptyState" style="display: none;">
-                <p>🎉</p>
-                <p>เรียนครบทุกคำแล้ว!</p>
-                <p>กดปุ่มด้านล่างเพื่อเริ่มใหม่</p>
-            </div>
-        </section>
+            <!-- filters -->
+            <section class="filters" id="filters">
+                <div class="filter-row">
+                    <span class="filter-label">ระดับ</span>
+                    <div class="chips" id="levelChips">
+                        <button class="chip" data-level="A1">A1</button>
+                        <button class="chip" data-level="A2">A2</button>
+                        <button class="chip" data-level="B1">B1</button>
+                        <button class="chip" data-level="B2">B2</button>
+                    </div>
+                </div>
+                <div class="filter-row">
+                    <span class="filter-label">ชนิดคำ</span>
+                    <select id="posSelect" class="select-input">
+                        <option value="">ทั้งหมด</option>
+                    </select>
+                    <span class="filter-label">โหมด</span>
+                    <select id="modeSelect" class="select-input">
+                        <option value="flip">พลิกการ์ด</option>
+                        <option value="quiz">เลือก 4 ตัวเลือก</option>
+                        <option value="typing">พิมพ์คำตอบ</option>
+                    </select>
+                </div>
+            </section>
 
-        <!-- Action Buttons -->
-        <section class="actions">
-            <button id="startBtn" class="btn btn-primary btn-large">🚀 เริ่มสุ่มคำ</button>
-            <div class="action-group" id="cardActions" style="display: none;">
-                <button id="hideBtn" class="btn btn-success">𔘓 จำได้แล้ว</button>
-                <button id="nextBtn" class="btn btn-secondary">➡️ ถัดไป</button>
-            </div>
-        </section>
+            <!-- flashcard -->
+            <section class="flashcard-container" id="flashcardContainer">
+                <div class="flashcard" id="flashcard">
+                    <div class="card-front">
+                        <h2 class="word" id="word">-</h2>
+                        <div class="word-meta">
+                            <span class="pos-tag" id="posTag">-</span>
+                            <span class="level-tag" id="levelTag">-</span>
+                            <button class="speak-btn" id="speakBtn" title="ออกเสียง (กด S)" aria-label="ออกเสียง">🔊</button>
+                        </div>
+                        <p class="card-schedule" id="cardSchedule"></p>
+                    </div>
+
+                    <!-- flip mode: translation toggle -->
+                    <div class="translation-section" id="flipControls">
+                        <label class="switch">
+                            <input type="checkbox" id="showTranslationToggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-label">💬 แสดงคำแปล <kbd>Space</kbd></span>
+                    </div>
+
+                    <div class="translation-content" id="translationContent" hidden>
+                        <div class="translation">
+                            <strong>🔊 Pronunciation:</strong>
+                            <p id="pronunciationText">-</p>
+                        </div>
+                        <div class="translation">
+                            <strong>💬 Meaning:</strong>
+                            <p id="translationText">-</p>
+                        </div>
+                    </div>
+
+                    <!-- quiz mode -->
+                    <div class="quiz-options" id="quizOptions" hidden></div>
+
+                    <!-- typing mode -->
+                    <div class="typing-box" id="typingBox" hidden>
+                        <input type="text" id="typingInput" class="select-input"
+                               placeholder="พิมพ์คำแปลภาษาไทย แล้วกด Enter" autocomplete="off">
+                        <p class="typing-feedback" id="typingFeedback"></p>
+                    </div>
+                </div>
+
+                <div class="empty-state" id="emptyState" hidden>
+                    <p>🎉</p>
+                    <p id="emptyTitle">ทบทวนครบแล้ววันนี้!</p>
+                    <p id="emptySub">กลับมาใหม่เมื่อถึงรอบทบทวนถัดไป</p>
+                </div>
+            </section>
+
+            <!-- actions -->
+            <section class="actions">
+                <button id="startBtn" class="btn btn-primary btn-large">🚀 เริ่มทบทวน</button>
+
+                <div class="action-group" id="cardActions" hidden>
+                    <div class="grade-row" id="gradeRow">
+                        <button class="btn btn-grade btn-grade-again" data-grade="1">
+                            <span class="grade-label">😵 ลืม</span><span class="grade-hint" data-hint="1"></span>
+                        </button>
+                        <button class="btn btn-grade btn-grade-hard" data-grade="3">
+                            <span class="grade-label">😐 ยาก</span><span class="grade-hint" data-hint="3"></span>
+                        </button>
+                        <button class="btn btn-grade btn-grade-good" data-grade="4">
+                            <span class="grade-label">🙂 ได้</span><span class="grade-hint" data-hint="4"></span>
+                        </button>
+                        <button class="btn btn-grade btn-grade-easy" data-grade="5">
+                            <span class="grade-label">😎 ง่าย</span><span class="grade-hint" data-hint="5"></span>
+                        </button>
+                    </div>
+                    <div class="secondary-row">
+                        <button id="hideBtn" class="btn btn-success">🎯 จำได้แล้ว ไม่ต้องถามอีก</button>
+                        <button id="skipBtn" class="btn btn-secondary">➡️ ข้าม</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- ============ BROWSE VIEW ============ -->
+        <div id="browseView" class="view" hidden>
+            <section class="filters">
+                <div class="filter-row">
+                    <input type="search" id="searchInput" class="select-input search-input"
+                           placeholder="ค้นหาคำศัพท์หรือคำแปล…" autocomplete="off">
+                </div>
+                <div class="filter-row">
+                    <span class="filter-label">ระดับ</span>
+                    <div class="chips" id="browseLevelChips">
+                        <button class="chip" data-level="A1">A1</button>
+                        <button class="chip" data-level="A2">A2</button>
+                        <button class="chip" data-level="B1">B1</button>
+                        <button class="chip" data-level="B2">B2</button>
+                    </div>
+                </div>
+            </section>
+            <div id="browseResults" class="word-table"></div>
+        </div>
+
+        <!-- ============ STATS VIEW ============ -->
+        <div id="statsView" class="view" hidden>
+            <section class="stats stats-grid">
+                <div class="stat-item"><span class="stat-label">📖 กำลังเรียน</span><span class="stat-value" id="sLearning">0</span></div>
+                <div class="stat-item"><span class="stat-label">🔁 กำลังทบทวน</span><span class="stat-value" id="sReview">0</span></div>
+                <div class="stat-item"><span class="stat-label">🏆 แม่นแล้ว</span><span class="stat-value" id="sMastered">0</span></div>
+                <div class="stat-item"><span class="stat-label">🎯 จำได้แล้ว</span><span class="stat-value" id="sSuspended">0</span></div>
+                <div class="stat-item"><span class="stat-label">🔥 ต่อเนื่อง</span><span class="stat-value" id="sStreak">0</span></div>
+                <div class="stat-item"><span class="stat-label">📅 วันนี้</span><span class="stat-value" id="sToday">0</span></div>
+            </section>
+
+            <section class="panel">
+                <h3 class="panel-title">ความคืบหน้าตามระดับ</h3>
+                <div id="levelBars" class="level-bars"></div>
+            </section>
+
+            <section class="panel">
+                <h3 class="panel-title">ทบทวนย้อนหลัง 1 ปี</h3>
+                <div id="heatmap" class="heatmap"></div>
+                <p class="heatmap-legend"><span>น้อย</span><i class="hm-0"></i><i class="hm-1"></i><i class="hm-2"></i><i class="hm-3"></i><i class="hm-4"></i><span>มาก</span></p>
+            </section>
+
+            <section class="panel">
+                <h3 class="panel-title">ตั้งค่า</h3>
+                <div class="filter-row">
+                    <span class="filter-label">เป้าหมายต่อวัน</span>
+                    <input type="number" id="dailyGoalInput" class="select-input" min="1" max="500" step="5">
+                    <button class="btn btn-secondary" id="saveGoalBtn">บันทึก</button>
+                </div>
+            </section>
+        </div>
 
         <footer>
-            <p>👤 <span id="currentUsername">-</span> | User ID: <code id="userIdDisplay">-</code></p>
+            <p>👤 <span id="currentUsername">-</span> · <span id="connStatus" class="conn-ok">เชื่อมต่อแล้ว</span></p>
         </footer>
     </div>
 
-    <!-- Learned Words Modal -->
-    <div id="hiddenModal" class="modal" style="display: none;">
+    <!-- ===================== MODAL ===================== -->
+    <div id="hiddenModal" class="modal" hidden>
         <div class="modal-content">
             <div class="modal-header">
                 <h2>🎯 คำที่จำได้แล้ว</h2>
-                <button class="modal-close" id="closeModalBtn">&times;</button>
+                <button class="modal-close" id="closeModalBtn" aria-label="ปิด">&times;</button>
+            </div>
+            <div class="modal-search">
+                <input type="search" id="hiddenSearch" class="select-input" placeholder="ค้นหาในรายการ…" autocomplete="off">
             </div>
             <div class="modal-body" id="hiddenWordsList">
                 <p class="loading">กำลังโหลด...</p>
@@ -129,6 +265,8 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <div id="toast" class="toast" hidden></div>
+
+    <script type="module" src="app.js"></script>
 </body>
 </html>

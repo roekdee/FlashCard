@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#7a8a7f"/>
+  <rect x="146" y="176" width="220" height="160" rx="6" fill="#fafaf8"/>
+  <text x="256" y="288" font-family="Manrope, Segoe UI, sans-serif" font-size="76"
+        font-weight="300" fill="#3a3a3a" text-anchor="middle">Aa</text>
+</svg>
