@@ -20,10 +20,13 @@ I wanted to actually work through the Oxford 3000, so I built a flashcard traine
 What it does:
 
 - **Spaced repetition (SM-2)** — grade each card *ลืม / ยาก / ได้ / ง่าย* and the ease factor, interval and next-due date are recalculated. Each button shows the interval it will give you before you press it.
+- **A cap on new words per day** — the part most SRS clones leave out. Deal yourself forty unseen words today and they all come back tomorrow on top of forty more; the backlog grows until you quit. `new_per_day` stops that.
 - **Three study modes** — flip the card, pick from four meanings, or type the translation.
-- **Pronunciation** — the browser's own speech synthesis reads the word out; no audio files, no API.
-- **Stats** — a daily goal bar, a review streak, a year-long heatmap and progress per CEFR level.
-- **Filters and search** — study only A1, or only verbs; search all 3,025 words in English or Thai.
+- **Undo** — the last answer can be taken back, schedule and streak included.
+- **Example sentences** — every word carries one, in English and Thai.
+- **Pronunciation** — a Thai phonetic respelling on the card, plus the browser's own speech synthesis; no audio files, no API.
+- **Stats** — a daily goal bar, a review streak, a year-long heatmap, a seven-day forecast of what is coming, and progress per CEFR level.
+- **Filters and search** — study only A1, or only verbs; search all 3,015 words in English or Thai.
 - **Per-user progress, enforced by the database** — row level security means a user's card states and review log are unreadable to anyone else, even with the browser key in hand.
 - **Installable and offline-tolerant** — a PWA, and reviews you make with no connection are queued and replayed when it comes back.
 - **No framework, no build step** — plain ES modules, works as a static site.
@@ -48,20 +51,22 @@ Scheduling, queue building and stats all run **inside the database**, so one scr
 
 | Function | What it does |
 |---|---|
-| `get_study_queue(limit, levels, pos)` | due cards first, topped up with unseen words |
+| `get_study_queue(limit, levels, pos)` | due cards first, topped up with unseen words within the daily new-card budget |
 | `review_card(word_id, grade, mode)` | applies SM-2, writes the card state and the review log, atomically |
+| `undo_last_review()` | rolls the last answer back to the state stored on the review row |
 | `set_card_suspended(word_id, bool)` | the "จำได้แล้ว" list |
-| `get_stats()` | counts, today, streak, 365-day heatmap, per-level progress, in one JSON |
+| `get_stats()` | counts, today, streak, 365-day heatmap, 7-day forecast, per-level progress, in one JSON |
 | `search_words(query, levels, …)` | catalogue search, English or Thai, with your status per row |
-| `get_quiz_options(word_id)` | three same-level distractors for the quiz mode |
+| `get_quiz_options(word_id)` | three same-level distractors that do not share the answer's meaning |
 | `register_user(username, password)` | sign-up by username (see *Auth* below) |
+| `change_password(current, new)` | verifies the old password and rehashes the new one |
 
 Files:
 
 - **`api.js`** — every call to Supabase, plus the offline outbox.
 - **`app.js`** — views, the study loop, keyboard shortcuts, speech.
 - **`supabase/migrations/`** — the whole schema, the SM-2 implementation and the RLS policies.
-- **`supabase/seed/`** — the 3,025-word catalogue as JSON.
+- **`supabase/seed/`** — the 3,015-word catalogue as JSON.
 
 ## Live
 
@@ -83,6 +88,7 @@ The publishable key is *meant* to be in the browser — RLS is what protects the
 | `1` `2` `3` `4` | ลืม / ยาก / ได้ / ง่าย |
 | `S` | speak the word |
 | `N` | skip to the back of the session |
+| `Z` | undo the last answer |
 
 ## Auth
 
@@ -96,4 +102,6 @@ This replaced a Google Sheet. The old version kept the word list and every user'
 
 Two things about the old version worth recording. The API checked its shared key only on `POST`, and every real call went through `GET` — so anyone with the URL could read or overwrite any user's progress. And the README claimed SM-2, but no code ever computed it: the `ef`, `interval` and `next_due` columns sat at their defaults on all 190 rows. The scheduling in this version is real, and `0002_sm2_rpc.sql` is where it lives.
 
-The word data came over as-is and is not perfect. Pronunciations exist for 117 of 3,025 words, and a few translations are plainly wrong (`bank (river)` is glossed as *ธนาคาร*). The part-of-speech tags that had leaked into the word column — `our det.`, `fifteen number` — are cleaned up in `0005_clean_word_column.sql`.
+The word data came over in poor shape and most of the work since has gone into it. The spreadsheet had part-of-speech tags leaking into the word column (`our det.`, `fifteen number`), homograph markers leaking into the Thai column (`นำ1`, `แหวน2`), nine head words duplicated outright, pronunciations for 117 of 3,015 entries, and 834 words sharing a Thai gloss with some other word — which is what made the multiple-choice quiz ambiguous in the first place. `0005` through `0011` deal with each of those.
+
+Every word now carries a Thai phonetic respelling and an example sentence in both languages. **No two words share a translation.** Some glosses are still loose where the source was — a few part-of-speech tags disagree with their own translation — and the transliterations were derived from the 117 originals rather than a dictionary, so treat them as a reading aid, not a reference.
