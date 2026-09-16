@@ -441,11 +441,30 @@ function showEmpty() {
     show($('startBtn'), true);
     $('startBtn').textContent = '🔄 โหลดใหม่';
 
+    // Say why the queue is empty. Blaming the filter when the real cause is the
+    // daily new-card budget sends people to the wrong control.
+    const s = state.stats || {};
+    const budgetSpent = (s.new_today ?? 0) >= (s.new_per_day ?? 20);
+    const nothingDue = (s.due_now ?? 0) === 0;
     const anyFilter = state.levels.length || state.pos;
-    $('emptyTitle').textContent = anyFilter ? 'ไม่มีคำตามตัวกรองนี้' : 'ทบทวนครบแล้ววันนี้!';
-    $('emptySub').textContent = anyFilter
-        ? 'ลองเอาตัวกรองระดับหรือชนิดคำออก'
-        : 'กลับมาใหม่เมื่อถึงรอบทบทวนถัดไป';
+
+    let title, sub;
+    if ((s.remaining ?? 1) <= 0) {
+        title = 'เรียนครบทุกคำแล้ว!';
+        sub = 'ไม่เหลือคำใหม่ในคลังอีกแล้ว';
+    } else if (nothingDue && budgetSpent) {
+        title = 'ครบโควตาคำใหม่ของวันนี้แล้ว';
+        sub = `วันนี้เปิดคำใหม่ไป ${s.new_today} คำ (เพดาน ${s.new_per_day}) · `
+            + 'อยากเรียนต่อวันนี้ ไปเพิ่ม "คำใหม่ต่อวัน" ที่แท็บสถิติ';
+    } else if (anyFilter) {
+        title = 'ไม่มีคำตามตัวกรองนี้';
+        sub = 'ลองเอาตัวกรองระดับหรือชนิดคำออก';
+    } else {
+        title = 'ทบทวนครบแล้ววันนี้!';
+        sub = 'กลับมาใหม่เมื่อถึงรอบทบทวนถัดไป';
+    }
+    $('emptyTitle').textContent = title;
+    $('emptySub').textContent = sub;
 }
 
 async function suspendCurrent() {

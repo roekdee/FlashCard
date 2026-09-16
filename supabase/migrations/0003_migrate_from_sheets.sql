@@ -62,14 +62,20 @@ begin
   -- hidden_forever -> suspended ("จำได้แล้ว"); learned -> a real card due tomorrow.
   -- Rows that were neither are dropped on purpose: they were only ever "seen",
   -- and a card_states row would hide the word from both the due and new queues.
+  -- created_at must be backdated. The daily new-card cap in 0008 counts rows
+  -- created today as "introduced today", so importing months of old progress
+  -- with a default now() spends the whole budget before the user studies
+  -- anything. (This is what migration 0012 had to repair.)
   insert into public.card_states (
-    user_id, word_id, status, repetitions, interval_days, ease_factor, due_at, updated_at)
+    user_id, word_id, status, repetitions, interval_days, ease_factor,
+    due_at, created_at, updated_at)
   select p.id, ls.word_id,
          case when ls.hidden then 'suspended' else 'review' end,
          case when ls.hidden then 0 else 1 end,
          case when ls.hidden then 0 else 1 end,
          2.50,
          case when ls.hidden then null else now() + interval '1 day' end,
+         now() - interval '180 days',
          now()
   from public.legacy_state ls
   join public.legacy_users lu on lu.user_key = ls.user_key
