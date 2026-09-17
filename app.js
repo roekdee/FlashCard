@@ -180,7 +180,13 @@ async function submitAuth() {
         if (signup) {
             const { needsConfirmation } = await api.signUp({ email: identifier, password, username });
             if (needsConfirmation) {
-                authNotice('สมัครแล้ว — เปิดลิงก์ยืนยันในอีเมลก่อนเข้าสู่ระบบ');
+                // Leaving them on the sign-up form made it look like nothing
+                // happened. Move to sign-in, keep the address, say what to do.
+                setAuthMode('signin');
+                $('identifier').value = identifier;
+                $('password').value = '';
+                authNotice(`ส่งลิงก์ยืนยันไปที่ ${identifier} แล้ว — กดลิงก์ในเมล `
+                    + '(เช็คโฟลเดอร์ Promotions/Spam ด้วย) แล้วเข้าสู่ระบบตรงนี้ได้เลย');
                 return;
             }
         } else {
