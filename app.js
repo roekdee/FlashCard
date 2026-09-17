@@ -23,6 +23,7 @@ const state = {
     authMode: 'signin',
     selectedPlan: null,
     payMethod: 'promptpay',
+    intent: null,
     rankMetric: 'week'
 };
 
@@ -458,6 +459,7 @@ function bindAppUI() {
         $('payNote').textContent = card.dataset.note || '';
     });
     $('payBtn').addEventListener('click', pay);
+    $('slipBtn').addEventListener('click', submitSlip);
 
     document.addEventListener('keydown', onKey);
 }
@@ -1213,9 +1215,9 @@ async function renderPro() {
     }
 
     const cfg = state.billing;
-    if (!cfg.omise_public_key) {
+    if (!cfg.omise_public_key && !cfg.promptpay_live) {
         $('planGrid').innerHTML = `<p class="empty-message">
-            ยังไม่ได้ตั้งค่าการชำระเงิน — เจ้าของระบบต้องใส่ Omise public key ก่อน</p>`;
+            ยังไม่เปิดรับชำระเงิน</p>`;
         show($('payPanel'), false);
     } else {
         $('planGrid').innerHTML = cfg.plans.map((p) => `
@@ -1267,6 +1269,13 @@ async function pay() {
     btn.textContent = '⏳ กำลังดำเนินการ...';
 
     try {
+        // PromptPay straight to the owner's account: no gateway, so the QR is
+        // drawn here and the payer proves it with a slip afterwards.
+        if (state.payMethod === 'promptpay' && state.billing.promptpay_live) {
+            await startDirectPromptPay();
+            return;
+        }
+
         let token;
         if (state.payMethod === 'card') {
             const omise = await api.loadOmise(state.billing.omise_public_key);
@@ -1313,6 +1322,64 @@ async function pay() {
     } finally {
         btn.disabled = false;
         btn.textContent = 'ดำเนินการชำระเงิน';
+    }
+}
+
+/**
+ * Draw the PromptPay QR for the plan that is selected and wait for a slip.
+ * The amount is whatever the server put on the intent, not what the page
+ * thinks the plan costs.
+ */
+async function startDirectPromptPay() {
+    const intent = await api.startPromptPay(state.selectedPlan);
+    state.intent = intent;
+
+    const { promptPayPayload, drawQR } = await import('./promptpay.js?v=dev');
+    const baht = intent.amount_satang / 100;
+
+    show($('qrImage'), false);
+    show($('qrCanvas'), true);
+    await drawQR($('qrCanvas'), promptPayPayload(intent.promptpay_id, baht));
+
+    $('qrAmount').textContent = `${intent.label_th} · ฿${baht.toFixed(2)}`;
+    $('qrStatus').textContent = 'สแกนแล้วโอนตามยอดนี้ให้ตรงเป๊ะ';
+    show($('slipUpload'), true);
+    show($('qrBox'), true);
+}
+
+/** Send the slip to be checked, and report exactly why if it is refused. */
+async function submitSlip() {
+    const file = $('slipFile').files?.[0];
+    const err = $('payError');
+    show(err, false);
+
+    if (!state.intent) return toast('เริ่มรายการชำระเงินก่อน');
+    if (!file) return toast('เลือกรูปสลิปก่อน');
+
+    const btn = $('slipBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ กำลังตรวจสลิป...';
+    try {
+        const result = await api.verifySlip({ intentId: state.intent.intent_id, file });
+
+        if (result.status === 'paid') {
+            state.account = await api.getAccount();
+            applyAccount();
+            await refreshStats();
+            show($('qrBox'), false);
+            toast('🎉 เป็นสมาชิก Pro แล้ว');
+            renderPro();
+            return;
+        }
+        // Verifier could not answer. The claim is kept, not thrown away.
+        $('qrStatus').textContent = result.message
+            || 'ส่งสลิปแล้ว รอตรวจสอบ';
+    } catch (e) {
+        err.textContent = e.message;
+        show(err, true);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'ตรวจสลิปและเปิด Pro';
     }
 }
 
