@@ -551,7 +551,7 @@ kbd {
     background: var(--border-color);
 }
 
-.btn-google {
+.btn-oauth {
     width: 100%;
     display: flex;
     align-items: center;
@@ -561,7 +561,8 @@ kbd {
     color: var(--text-color);
 }
 
-.btn-google:hover { border-color: var(--primary-color); }
+.btn-oauth + .btn-oauth { margin-top: 8px; }
+.btn-oauth:hover { border-color: var(--primary-color); }
 
 /* ===================== PLAN CHROME ===================== */
 .plan-pill {

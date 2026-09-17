@@ -98,17 +98,66 @@ function takeRedirectError() {
  * Google was shown unconditionally, so before the provider was enabled in the
  * Supabase dashboard the button just produced "provider is not enabled".
  */
+/**
+ * Every provider the app knows how to label. A name the project has enabled
+ * but this table does not cover still gets a button, just a plain one.
+ */
+const OAUTH_LABELS = {
+    google: { name: 'Google', svg:
+        '<path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.7v3h3.9c2.3-2.1 3.5-5.2 3.5-8.9z"/>'
+      + '<path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.9-3a7.2 7.2 0 0 1-10.7-3.8h-4v3.1A12 12 0 0 0 12 24z"/>'
+      + '<path fill="#FBBC05" d="M5.3 14.3a7.1 7.1 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/>'
+      + '<path fill="#EA4335" d="M12 4.8c1.8 0 3.4.6 4.6 1.8l3.5-3.5A12 12 0 0 0 1.3 6.6l4 3.1A7.2 7.2 0 0 1 12 4.8z"/>' },
+    facebook: { name: 'Facebook', svg:
+        '<path fill="#1877F2" d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7.1V12h3V9.4c0-3 1.8-4.7 4.5-4.7 1.3 0 2.7.2 2.7.2v3h-1.5c-1.5 0-2 .9-2 1.9V12h3.3l-.5 3.5h-2.8v8.4A12 12 0 0 0 24 12z"/>' },
+    apple: { name: 'Apple', svg:
+        '<path fill="currentColor" d="M17.6 12.7c0-2.7 2.2-4 2.3-4.1-1.2-1.8-3.2-2-3.9-2.1-1.6-.2-3.2 1-4 1-.8 0-2.1-1-3.5-1-1.8 0-3.5 1.1-4.4 2.7-1.9 3.2-.5 8 1.3 10.6.9 1.3 2 2.7 3.4 2.7 1.4-.1 1.9-.9 3.5-.9 1.7 0 2.1.9 3.5.8 1.5 0 2.4-1.3 3.3-2.6 1-1.5 1.5-3 1.5-3-.1 0-2.9-1.1-3-4.1zM15 4.6c.7-.9 1.2-2.1 1.1-3.4-1.1 0-2.4.7-3.2 1.7-.7.8-1.3 2.1-1.1 3.3 1.2.1 2.4-.6 3.2-1.6z"/>' },
+    github: { name: 'GitHub', svg:
+        '<path fill="currentColor" d="M12 0a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.500-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.2 4.7 18.2 5 18.2 5c.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 0z"/>' },
+    discord: { name: 'Discord', svg:
+        '<path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.3.6a18.3 18.3 0 0 1 4.4 1.4 17.9 17.9 0 0 0-15 0A18.3 18.3 0 0 1 8.9 3.6L8.6 3a19.8 19.8 0 0 0-4.9 1.4C.6 9-.3 13.6.2 18.1a19.9 19.9 0 0 0 6 3 14.6 14.6 0 0 0 1.3-2.1 13 13 0 0 1-2-1c.2-.1.3-.2.5-.4a14.2 14.2 0 0 0 12.1 0l.5.4a13 13 0 0 1-2 1c.4.7.8 1.4 1.3 2.1a19.9 19.9 0 0 0 6-3c.6-5.2-.8-9.8-3.6-13.7zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.5 8 10.5s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/>' },
+    line: { name: 'LINE', svg:
+        '<path fill="#06C755" d="M12 2C6.5 2 2 5.6 2 10.1c0 4 3.6 7.4 8.4 8 .3.1.8.2.9.5.1.3.1.7 0 1l-.1.9c0 .3-.2 1 .9.6 1.1-.5 6-3.5 8.2-6 1.5-1.6 2.2-3.3 2.2-5C22 5.6 17.5 2 12 2z"/>' },
+    azure:    { name: 'Microsoft' },
+    kakao:    { name: 'Kakao' },
+    twitter:  { name: 'X' },
+    linkedin_oidc: { name: 'LinkedIn' }
+};
+
 async function applyPublicConfig() {
-    show($('googleBtn'), false);
-    show($('googleDivider'), false);
+    renderOAuthButtons([]);
     try {
         state.billing = await api.getBillingConfig();
     } catch {
         return;   // leave the email form working on its own
     }
-    const google = Boolean(state.billing.google_enabled);
-    show($('googleBtn'), google);
-    show($('googleDivider'), google);
+    renderOAuthButtons(state.billing.oauth_providers || []);
+}
+
+/** A button per enabled provider, and no divider when there are none. */
+function renderOAuthButtons(providers) {
+    const box = $('oauthButtons');
+    box.textContent = '';
+    show($('oauthDivider'), providers.length > 0);
+
+    for (const provider of providers) {
+        const { name, svg } = OAUTH_LABELS[provider] || { name: provider };
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-oauth btn-large';
+        if (svg) {
+            // The markup is ours, not the provider's — nothing user supplied
+            // reaches innerHTML here.
+            const mark = document.createElement('span');
+            mark.innerHTML = `<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">${svg}</svg>`;
+            btn.appendChild(mark.firstChild);
+        }
+        btn.appendChild(document.createTextNode(`ดำเนินการต่อด้วย ${name}`));
+        btn.addEventListener('click', async () => {
+            try { await api.signInWithProvider(provider); }
+            catch (err) { authError(err.message); }
+        });
+        box.appendChild(btn);
+    }
 }
 
 // ===================== AUTH =====================
@@ -120,10 +169,6 @@ function bindAuthUI() {
     $('submitAuthBtn').addEventListener('click', submitAuth);
     $('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAuth(); });
     $('identifier').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('password').focus(); });
-    $('googleBtn').addEventListener('click', async () => {
-        try { await api.signInWithGoogle(); }
-        catch (err) { authError(err.message); }
-    });
     $('forgotBtn').addEventListener('click', showForgot);
     $('forgotSubmitBtn').addEventListener('click', sendReset);
     $('forgotEmail').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendReset(); });
