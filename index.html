@@ -427,7 +427,16 @@
 
                 <div class="qr-box" id="qrBox" hidden>
                     <p class="qr-title">สแกนด้วยแอปธนาคารเพื่อจ่ายด้วย PromptPay</p>
-                    <img id="qrImage" alt="PromptPay QR" class="qr-image">
+                    <img id="qrImage" alt="PromptPay QR" class="qr-image" hidden>
+                    <canvas id="qrCanvas" class="qr-image" hidden></canvas>
+                    <p class="qr-amount" id="qrAmount"></p>
+
+                    <div id="slipUpload" hidden>
+                        <p class="field-hint">จ่ายแล้วให้แนบสลิปเพื่อเปิดใช้งานทันที</p>
+                        <input type="file" id="slipFile" accept="image/*" class="select-input">
+                        <button class="btn btn-pro" id="slipBtn">ตรวจสลิปและเปิด Pro</button>
+                    </div>
+
                     <p class="qr-status" id="qrStatus">กำลังรอการชำระเงิน…</p>
                 </div>
             </section>

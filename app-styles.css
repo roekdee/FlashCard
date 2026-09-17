@@ -688,6 +688,9 @@ kbd {
 
 .qr-box { text-align: center; margin-top: 20px; }
 .qr-title { font-size: 0.875rem; color: var(--text-muted); margin-bottom: 12px; }
+.qr-amount { font-size: 1.05rem; font-weight: 600; margin: 10px 0 4px; }
+#slipUpload { margin: 12px 0; display: grid; gap: 8px; justify-items: center; }
+#slipFile { max-width: 280px; }
 .qr-image { width: 220px; max-width: 100%; border: 1px solid var(--border-color); border-radius: 2px; }
 .qr-status { margin-top: 12px; font-size: 0.875rem; color: var(--text-muted); }
 

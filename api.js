@@ -260,6 +260,46 @@ export async function createCharge({ plan, method, token }) {
     return body;
 }
 
+/**
+ * Start a PromptPay payment that goes straight to the owner's account, with no
+ * gateway in between. Returns the number to build the QR from and the amount
+ * the slip will have to match.
+ */
+export async function startPromptPay(plan) {
+    return unwrap(await supabase.rpc('start_promptpay', { p_plan_code: plan }));
+}
+
+/**
+ * Hand a slip to the server to be checked. Whatever the verifier says, the
+ * amount and the receiving account are compared against the intent on the
+ * server, so a doctored response cannot buy anything.
+ */
+export async function verifySlip({ intentId, file }) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('ต้องเข้าสู่ระบบก่อน');
+
+    const image_base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = () => reject(new Error('อ่านไฟล์สลิปไม่ได้'));
+        reader.readAsDataURL(file);
+    });
+
+    const res = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/verify-slip`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: CONFIG.SUPABASE_KEY,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ intent_id: intentId, image_base64 })
+    });
+
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || body.error) throw new Error(body.error || 'ตรวจสลิปไม่สำเร็จ');
+    return body;
+}
+
 /** Omise.js, loaded only when somebody actually reaches for a card. */
 let omiseReady = null;
 export function loadOmise(publicKey) {
