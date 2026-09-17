@@ -70,6 +70,29 @@
         </div>
     </div>
 
+    <!-- "forgot password", reached from the link on the sign-in form -->
+    <div id="forgotScreen" class="login-screen" hidden>
+        <div class="login-container">
+            <div class="login-header">
+                <h1>🔑 ลืมรหัสผ่าน</h1>
+                <p class="subtitle">กรอกอีเมลที่ใช้สมัคร เราจะส่งลิงก์ตั้งรหัสผ่านใหม่ไปให้</p>
+            </div>
+            <div class="login-form">
+                <div class="input-group">
+                    <label for="forgotEmail">📧 อีเมล</label>
+                    <input type="email" id="forgotEmail" autocomplete="email"
+                           placeholder="you@example.com">
+                </div>
+                <p class="auth-error" id="forgotError" hidden></p>
+                <p class="auth-notice" id="forgotNotice" hidden></p>
+                <button id="forgotSubmitBtn" class="btn btn-primary btn-large">ส่งลิงก์ตั้งรหัสผ่านใหม่</button>
+                <p class="login-hint">
+                    <button type="button" class="link-btn" id="backToLoginBtn">← กลับไปเข้าสู่ระบบ</button>
+                </p>
+            </div>
+        </div>
+    </div>
+
     <!-- password recovery, reached from the emailed link -->
     <div id="resetScreen" class="login-screen" hidden>
         <div class="login-container">

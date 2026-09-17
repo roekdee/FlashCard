@@ -124,7 +124,10 @@ function bindAuthUI() {
         try { await api.signInWithGoogle(); }
         catch (err) { authError(err.message); }
     });
-    $('forgotBtn').addEventListener('click', forgotPassword);
+    $('forgotBtn').addEventListener('click', showForgot);
+    $('forgotSubmitBtn').addEventListener('click', sendReset);
+    $('forgotEmail').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendReset(); });
+    $('backToLoginBtn').addEventListener('click', showLogin);
     $('resetSubmitBtn').addEventListener('click', submitReset);
 }
 
@@ -201,21 +204,47 @@ async function submitAuth() {
     }
 }
 
-async function forgotPassword() {
-    const email = $('identifier').value.trim();
-    if (!/\S+@\S+\.\S+/.test(email)) {
-        return authError('กรอกอีเมลในช่องด้านบนก่อน แล้วกดลืมรหัสผ่านอีกครั้ง');
-    }
+const forgotError = (msg) => { $('forgotError').textContent = msg; show($('forgotError'), Boolean(msg)); };
+const forgotNotice = (msg) => { $('forgotNotice').textContent = msg; show($('forgotNotice'), Boolean(msg)); };
+
+/** The link on the sign-in form. Carries over whatever was typed there. */
+function showForgot() {
+    show($('loginScreen'), false);
+    show($('resetScreen'), false);
+    show($('mainApp'), false);
+    show($('forgotScreen'), true);
+    const typed = $('identifier').value.trim();
+    $('forgotEmail').value = /\S+@\S+\.\S+/.test(typed) ? typed : '';
+    forgotError(''); forgotNotice('');
+    $('forgotEmail').focus();
+}
+
+async function sendReset() {
+    const email = $('forgotEmail').value.trim();
+    forgotError(''); forgotNotice('');
+    if (!/\S+@\S+\.\S+/.test(email)) return forgotError('กรอกอีเมลให้ถูกต้อง');
+
+    const btn = $('forgotSubmitBtn');
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '🔄 กำลังส่ง...';
     try {
         await api.sendPasswordReset(email);
-        authNotice('ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลแล้ว');
+        // Say the same thing whether or not the address exists, so this cannot
+        // be used to find out who has an account here.
+        forgotNotice(`ถ้ามีบัญชีที่ใช้ ${email} เราส่งลิงก์ตั้งรหัสผ่านใหม่ไปแล้ว `
+            + '— เช็คโฟลเดอร์ Promotions/Spam ด้วย');
     } catch (err) {
-        authError(err.message);
+        forgotError(err.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = label;
     }
 }
 
 function showLogin() {
     show($('loginScreen'), true);
+    show($('forgotScreen'), false);
     show($('resetScreen'), false);
     show($('mainApp'), false);
     setAuthMode('signin');
@@ -223,6 +252,7 @@ function showLogin() {
 
 function showReset() {
     show($('loginScreen'), false);
+    show($('forgotScreen'), false);
     show($('mainApp'), false);
     show($('resetScreen'), true);
 }
@@ -248,6 +278,7 @@ async function submitReset() {
 
 async function enterApp() {
     show($('loginScreen'), false);
+    show($('forgotScreen'), false);
     show($('resetScreen'), false);
     show($('mainApp'), true);
     if (location.hash) history.replaceState(null, '', location.pathname);
