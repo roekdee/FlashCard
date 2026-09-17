@@ -1236,6 +1236,57 @@ async function renderPro() {
     }
 
     renderBillingHistory();
+    renderAdminQueue();
+}
+
+/**
+ * The owner's slip queue. Everyone else gets "not allowed" from the RPC, so
+ * there is nothing to hide client side — the panel simply stays empty.
+ */
+async function renderAdminQueue() {
+    let rows;
+    try { rows = await api.pendingPayments(); }
+    catch { return show($('adminPanel'), false); }
+
+    show($('adminPanel'), true);
+    const box = $('adminQueue');
+    if (!rows.length) {
+        box.innerHTML = '<p class="empty-message">ไม่มีสลิปรอตรวจ</p>';
+        return;
+    }
+
+    box.innerHTML = rows.map((r) => `
+        <div class="word-row" data-intent="${r.id}">
+            <div class="word-row-main">
+                <strong>฿${baht(r.amount_satang)} · ${r.months} เดือน</strong>
+                <span class="translation-small">${escapeHtml(r.username || r.email)} · ${formatDate(r.created_at)}</span>
+            </div>
+            <div class="word-row-meta">
+                <button class="btn btn-secondary" data-slip="${escapeHtml(r.slip_path)}">ดูสลิป</button>
+                <button class="btn btn-pro" data-approve="${r.id}">อนุมัติ</button>
+                <button class="btn btn-secondary" data-reject="${r.id}">ปฏิเสธ</button>
+            </div>
+        </div>`).join('');
+
+    box.onclick = async (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        try {
+            if (btn.dataset.slip) {
+                window.open(await api.slipUrl(btn.dataset.slip), '_blank', 'noopener');
+            } else if (btn.dataset.approve) {
+                await api.approvePayment(btn.dataset.approve, 'ตรวจด้วยตาแล้ว');
+                toast('อนุมัติแล้ว');
+                renderAdminQueue();
+            } else if (btn.dataset.reject) {
+                await api.rejectPayment(btn.dataset.reject, 'ยอดไม่ตรง/ไม่พบเงินเข้า');
+                toast('ปฏิเสธแล้ว');
+                renderAdminQueue();
+            }
+        } catch (err) {
+            toast(err.message);
+        }
+    };
 }
 
 async function renderBillingHistory() {
