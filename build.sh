@@ -20,6 +20,13 @@ VERSION=$(date +%Y%m%d%H%M%S)
 sed -i "s/?v=dev/?v=${VERSION}/g" dist/index.html dist/privacy.html dist/terms.html dist/app.js dist/promptpay.js
 sed -i "s/^const VERSION = .*/const VERSION = 'oxford3000-${VERSION}';/" dist/sw.js
 
-# python instead of `zip`, which Git Bash on Windows does not ship
-python -c "import shutil; shutil.make_archive('flashcard-site', 'zip', 'dist')"
-echo "built flashcard-site.zip ($(du -h flashcard-site.zip | cut -f1)) · asset version ${VERSION}"
+# The zip is only for hand-deploying by drag and drop. On Netlify's builder
+# dist/ is published directly, and `python` is not on PATH there, so skip it
+# rather than failing the build over an artefact nobody will download.
+PY=$(command -v python || command -v python3 || true)
+if [ -n "${NETLIFY:-}" ] || [ -z "$PY" ]; then
+    echo "built dist/ · asset version ${VERSION}"
+else
+    "$PY" -c "import shutil; shutil.make_archive('flashcard-site', 'zip', 'dist')"
+    echo "built flashcard-site.zip ($(du -h flashcard-site.zip | cut -f1)) · asset version ${VERSION}"
+fi
