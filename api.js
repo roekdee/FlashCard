@@ -94,9 +94,14 @@ export async function signUp({ email, password, username }) {
     return { user: data.user, needsConfirmation: !data.session };
 }
 
-export async function signInWithGoogle() {
+/**
+ * Sign in through any OAuth provider enabled on the project. The caller only
+ * ever passes a name that came back from `get_billing_config`, so a provider
+ * that is not turned on never reaches GoTrue.
+ */
+export async function signInWithProvider(provider) {
     const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider,
         options: { redirectTo: window.location.origin }
     });
     if (error) throw new Error(translateError(error));
