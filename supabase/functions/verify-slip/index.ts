@@ -10,7 +10,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const VERIFY_URL   = Deno.env.get('SLIP_VERIFY_URL') ?? 'https://api.nearbyshop.xyz/api/v1/verify';
+// xNearby SlipVerify v2: multipart, field `slip`, plus the account we expect.
+const VERIFY_URL   = Deno.env.get('SLIP_VERIFY_URL') ?? 'https://api.nearbyshop.xyz/slipVerify/v2';
 const VERIFY_TOKEN = Deno.env.get('SLIP_VERIFY_TOKEN');
 
 const cors = {
@@ -46,8 +47,10 @@ function receiverLooksRight(payload: unknown, expected: string): boolean {
 /** Pull the bank's transaction reference out of whatever shape came back. */
 function slipRef(payload: any): string | null {
   const c = payload?.data ?? payload ?? {};
-  const v = c.transRef ?? c.transactionId ?? c.ref ?? c.transaction_ref ??
-            c.receivingBank?.ref ?? c.sendingBank?.ref ?? null;
+  // docs.nearbyshop.xyz/slip-verify.html calls it data.trans_id; the rest are
+  // what other verifiers use, so swapping provider does not need a code change.
+  const v = c.trans_id ?? c.transRef ?? c.transactionId ?? c.transaction_id ??
+            c.ref ?? c.transaction_ref ?? c.refNbr ?? null;
   return v ? String(v) : null;
 }
 
@@ -58,6 +61,15 @@ function amountSatang(payload: any): number | null {
   if (v === null || v === undefined) return null;
   const n = Number(v);
   return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
+/** base64 -> Blob, so the slip can go out as a real multipart file part. */
+function blobFromBase64(b64: string): Blob {
+  const clean = b64.includes(',') ? b64.split(',')[1] : b64;
+  const bin = atob(clean);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: 'image/jpeg' });
 }
 
 Deno.serve(async (req) => {
@@ -92,45 +104,81 @@ Deno.serve(async (req) => {
 
   const { data: settings } = await admin
     .from('app_settings')
-    .select('promptpay_id')
+    .select('promptpay_id, promptpay_name')
     .maybeSingle();
   if (!settings?.promptpay_id) return json({ error: 'promptpay not configured' }, 503);
 
-  if (!VERIFY_TOKEN) {
-    // No verifier wired up: keep the money claim, let the owner decide.
-    return json({ status: 'pending_review',
-                  message: 'ส่งสลิปแล้ว รอตรวจสอบ' });
+  // Keep the slip. Without it the owner has nothing to look at when the
+  // verifier cannot decide — which is exactly when it is needed.
+  if (body.image_base64) {
+    const slipPath = `${user.id}/${intent.id}.jpg`;
+    const { error: upErr } = await admin.storage
+      .from('slips')
+      .upload(slipPath, blobFromBase64(body.image_base64), {
+        contentType: 'image/jpeg', upsert: true
+      });
+    if (!upErr) {
+      await admin.from('payment_intents')
+        .update({ slip_path: slipPath }).eq('id', intent.id);
+    }
   }
 
+  const pending = (message: string) => json({ status: 'pending_review', message });
+
+  if (!VERIFY_TOKEN) {
+    // No verifier wired up: keep the money claim, let the owner decide.
+    return pending('ส่งสลิปแล้ว รอเจ้าของระบบตรวจสอบ');
+  }
+
+  const amountBaht = (intent.amount_satang / 100).toFixed(2);
   let payload: any;
   try {
-    const res = await fetch(VERIFY_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json',
-                 authorization: `Bearer ${VERIFY_TOKEN}` },
-      body: JSON.stringify(body.qr_payload
-        ? { payload: body.qr_payload }
-        : { image: body.image_base64 })
-    });
+    let res: Response;
+    if (body.qr_payload) {
+      // noSlip is the fast path: the QR string alone, no image to read.
+      res = await fetch(VERIFY_URL.replace(/\/slipVerify\/v\d$/, '/slipVerify/noSlip'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json',
+                   authorization: `Bearer ${VERIFY_TOKEN}` },
+        body: JSON.stringify({
+          qr_payload: body.qr_payload,
+          amount: amountBaht,
+          expected_account_no: settings.promptpay_id
+        })
+      });
+    } else {
+      const form = new FormData();
+      form.append('slip', blobFromBase64(body.image_base64!), 'slip.jpg');
+      form.append('expected_account_no', settings.promptpay_id);
+      if (settings.promptpay_name) {
+        form.append('expected_receiver_name', settings.promptpay_name);
+      }
+      res = await fetch(VERIFY_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${VERIFY_TOKEN}` },
+        body: form
+      });
+    }
     payload = await res.json();
-    if (!res.ok) {
-      return json({ status: 'pending_review',
-                    message: 'ตรวจสลิปอัตโนมัติไม่สำเร็จ รอตรวจสอบด้วยคนแทน' });
+    // The success marker is `status: "success"`, not a boolean `success`.
+    const ok = res.ok &&
+      (payload?.status === 'success' || payload?.success === true ||
+       (payload?.status === undefined && payload?.success === undefined));
+    if (!ok) {
+      return pending('ตรวจสลิปอัตโนมัติไม่สำเร็จ รอเจ้าของระบบตรวจสอบ');
     }
   } catch {
-    return json({ status: 'pending_review',
-                  message: 'ตรวจสลิปอัตโนมัติไม่สำเร็จ รอตรวจสอบด้วยคนแทน' });
+    return pending('ตรวจสลิปอัตโนมัติไม่สำเร็จ รอเจ้าของระบบตรวจสอบ');
   }
 
   const ref  = slipRef(payload);
   const paid = amountSatang(payload);
 
   if (!ref) {
-    return json({ status: 'pending_review',
-                  message: 'อ่านเลขอ้างอิงจากสลิปไม่ได้ รอตรวจสอบด้วยคน' });
+    return pending('อ่านเลขอ้างอิงจากสลิปไม่ได้ รอเจ้าของระบบตรวจสอบ');
   }
   if (paid !== intent.amount_satang) {
-    return json({ error: `ยอดเงินไม่ตรง — ต้องโอน ${(intent.amount_satang / 100).toFixed(2)} บาท`,
+    return json({ error: `ยอดเงินไม่ตรง — ต้องโอน ${amountBaht} บาท`,
                   status: 'amount_mismatch' }, 400);
   }
   if (!receiverLooksRight(payload, settings.promptpay_id)) {

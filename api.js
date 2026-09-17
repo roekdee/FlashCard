@@ -300,6 +300,36 @@ export async function verifySlip({ intentId, file }) {
     return body;
 }
 
+// ---------- the owner's approval queue ----------
+// These all answer "not allowed" to everybody else, so the app can call them
+// without first knowing who is signed in.
+
+export async function amIOwner() {
+    return unwrap(await supabase.rpc('am_i_owner')) === true;
+}
+
+export async function pendingPayments() {
+    return unwrap(await supabase.rpc('admin_pending_payments')) || [];
+}
+
+export async function approvePayment(intentId, note) {
+    return unwrap(await supabase.rpc('admin_settle_payment',
+        { p_intent: intentId, p_note: note || null }));
+}
+
+export async function rejectPayment(intentId, note) {
+    return unwrap(await supabase.rpc('admin_reject_payment',
+        { p_intent: intentId, p_note: note || null }));
+}
+
+/** A link to a slip that expires, rather than making the bucket public. */
+export async function slipUrl(path) {
+    const { data, error } = await supabase.storage
+        .from('slips').createSignedUrl(path, 600);
+    if (error) throw new Error(error.message);
+    return data.signedUrl;
+}
+
 /** Omise.js, loaded only when somebody actually reaches for a card. */
 let omiseReady = null;
 export function loadOmise(publicKey) {
