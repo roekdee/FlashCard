@@ -10,14 +10,14 @@ cd "$(dirname "$0")"
 
 rm -rf dist flashcard-site.zip
 mkdir -p dist
-cp index.html privacy.html terms.html app.js api.js promptpay.js styles.css word-meta-styles.css app-styles.css \
+cp index.html privacy.html terms.html app.js api.js grammar.js grammar.json promptpay.js styles.css word-meta-styles.css app-styles.css \
    sw.js manifest.webmanifest icon.svg icon-maskable.svg dist/
 
 # single page: anything unknown falls back to the app shell
 printf '/*    /index.html   200\n' > dist/_redirects
 
 VERSION=$(date +%Y%m%d%H%M%S)
-sed -i "s/?v=dev/?v=${VERSION}/g" dist/index.html dist/privacy.html dist/terms.html dist/app.js dist/promptpay.js
+sed -i "s/?v=dev/?v=${VERSION}/g" dist/index.html dist/privacy.html dist/terms.html dist/app.js dist/grammar.js dist/promptpay.js
 sed -i "s/^const VERSION = .*/const VERSION = 'oxford3000-${VERSION}';/" dist/sw.js
 
 # The zip is only for hand-deploying by drag and drop. On Netlify's builder

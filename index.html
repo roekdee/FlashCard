@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#f5f5f0">
     <meta name="description" content="เรียนคำศัพท์ Oxford 3000 ด้วยระบบทบทวนแบบเว้นช่วง (SM-2)">
     <title>Oxford 3000 Flashcards</title>
+    <script>try { const t = localStorage.getItem('flash_theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
     <link rel="stylesheet" href="styles.css?v=dev">
@@ -111,6 +112,7 @@
                 </div>
                 <div class="header-actions">
                     <span class="plan-pill" id="planPill" hidden>PRO</span>
+                    <button id="themeBtn" class="btn btn-secondary btn-theme" title="สลับธีมมืด/สว่าง" aria-label="สลับธีมมืด/สว่าง">🌙</button>
                     <button id="viewHiddenBtn" class="btn btn-view-hidden">🎯 คำที่จำได้แล้ว</button>
                     <button id="logoutBtn" class="btn btn-logout">👋 ออกจากระบบ</button>
                 </div>
@@ -124,6 +126,7 @@
 
         <nav class="tabs" role="tablist">
             <button class="tab is-active" data-view="study" role="tab">📖 ทบทวน</button>
+            <button class="tab" data-view="grammar" role="tab" hidden>📝 ไวยากรณ์</button>
             <button class="tab" data-view="browse" role="tab">🔍 ค้นหาคำ</button>
             <button class="tab" data-view="stats" role="tab">📊 สถิติ</button>
             <button class="tab" data-view="rank" role="tab">🏆 อันดับ</button>
@@ -164,6 +167,8 @@
                         <button class="chip" data-level="A2">A2</button>
                         <button class="chip" data-level="B1">B1</button>
                         <button class="chip" data-level="B2">B2</button>
+                        <button class="chip" data-level="C1">C1</button>
+                        <button class="chip" data-level="C2">C2</button>
                     </div>
                 </div>
                 <div class="filter-row">
@@ -176,6 +181,7 @@
                         <option value="flip">พลิกการ์ด</option>
                         <option value="quiz">เลือก 4 ตัวเลือก</option>
                         <option value="typing">พิมพ์คำตอบ</option>
+                        <option value="speak">พูดออกเสียง</option>
                     </select>
                 </div>
             </section>
@@ -223,6 +229,11 @@
                                placeholder="พิมพ์คำแปลภาษาไทย แล้วกด Enter" autocomplete="off">
                         <p class="typing-feedback" id="typingFeedback"></p>
                     </div>
+
+                    <div class="speak-box" id="speakBox" hidden>
+                        <button class="btn btn-primary btn-mic" id="micBtn">🎤 กดแล้วพูดคำนี้ <kbd>M</kbd></button>
+                        <p class="typing-feedback" id="speakFeedback"></p>
+                    </div>
                 </div>
 
                 <div class="empty-state" id="emptyState" hidden>
@@ -260,6 +271,27 @@
             </section>
         </div>
 
+        <!-- ============ GRAMMAR ============ -->
+        <div id="grammarView" class="view" hidden>
+            <section class="filters">
+                <div class="filter-row">
+                    <span class="filter-label">ระดับ</span>
+                    <div class="chips" id="grammarLevelChips">
+                        <button class="chip is-active" data-level="A1">A1</button>
+                        <button class="chip" data-level="A2">A2</button>
+                        <button class="chip" data-level="B1">B1</button>
+                        <button class="chip" data-level="B2">B2</button>
+                        <button class="chip" data-level="C1">C1</button>
+                        <button class="chip" data-level="C2">C2</button>
+                    </div>
+                </div>
+                <p class="field-hint">รูปประโยคเรียงจากง่าย (A1) ไปยาก (C2) · ทำแบบฝึกหัดถูก 4 ใน 5 ข้อถึงนับว่าผ่าน</p>
+            </section>
+            <button class="btn btn-secondary" id="grammarBack" hidden>← กลับไปรายการบทเรียน</button>
+            <div id="grammarList" class="word-table"></div>
+            <div id="grammarDetail" hidden></div>
+        </div>
+
         <!-- ============ BROWSE ============ -->
         <div id="browseView" class="view" hidden>
             <section class="filters">
@@ -274,6 +306,8 @@
                         <button class="chip" data-level="A2">A2</button>
                         <button class="chip" data-level="B1">B1</button>
                         <button class="chip" data-level="B2">B2</button>
+                        <button class="chip" data-level="C1">C1</button>
+                        <button class="chip" data-level="C2">C2</button>
                     </div>
                 </div>
             </section>
