@@ -20,6 +20,11 @@ VERSION=$(date +%Y%m%d%H%M%S)
 sed -i "s/?v=dev/?v=${VERSION}/g" dist/index.html dist/privacy.html dist/terms.html dist/app.js dist/grammar.js dist/promptpay.js
 sed -i "s/^const VERSION = .*/const VERSION = 'oxford3000-${VERSION}';/" dist/sw.js
 
+# Visible version, bottom right: the release number from APP_VERSION plus the
+# commit, so a screenshot says exactly which build someone is looking at.
+COMMIT=${COMMIT_REF:-$(git rev-parse HEAD 2>/dev/null || echo local)}
+sed -i "s/__APP_VERSION__/$(cat APP_VERSION) · ${COMMIT:0:7}/" dist/index.html
+
 # The zip is only for hand-deploying by drag and drop. On Netlify's builder
 # dist/ is published directly, and `python` is not on PATH there, so skip it
 # rather than failing the build over an artefact nobody will download.

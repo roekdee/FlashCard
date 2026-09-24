@@ -1104,9 +1104,12 @@ function renderStudyStats() {
     const cap = s.new_per_day;                       // null = no ceiling (Pro)
     const newToday = s.new_today ?? 0;
     const newPart = cap == null
-        ? `คำใหม่วันนี้ ${newToday} · ไม่จำกัด`
+        ? `คำใหม่ ${newToday} (ไม่จำกัด)`
         : `คำใหม่เหลือ ${Math.max(0, cap - newToday)}/${cap}`;
-    $('goalText').textContent = `วันนี้ ${done} / ${goal} คำ${done >= goal ? ' 🎉' : ''} · ${newPart}`;
+    // The goal is a target to aim for, not a limit — say so, or 21/20 reads as a cap.
+    $('goalText').textContent = done >= goal
+        ? `🎉 ถึงเป้าวันนี้แล้ว · ทบทวน ${done} คำ (เป้า ${goal}) · ${newPart}`
+        : `เป้าวันนี้ ${done} / ${goal} คำ · ${newPart}`;
 }
 
 function renderStats() {
