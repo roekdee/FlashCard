@@ -26,7 +26,7 @@ What it does:
 - **Example sentences** — every word carries one, in English and Thai.
 - **Pronunciation** — a Thai phonetic respelling on the card, plus the browser's own speech synthesis; no audio files, no API.
 - **Stats** — a daily goal bar, a review streak, a year-long heatmap, a seven-day forecast of what is coming, and progress per CEFR level.
-- **Filters and search** — study only A1, or only verbs; search all 3,015 words in English or Thai.
+- **Filters and search** — study only A1, or only verbs; search all 12,733 words (A1–C2) in English or Thai.
 - **Free and Pro** — Pro opens B1/B2, lifts the new-card cap, adds the quiz and typing modes, the full stats, and the leaderboard. The limits are enforced in SQL, not by hiding buttons.
 - **Leaderboard and badges** — rank by reviews this week, streak, or words mastered; eleven badges track the long haul.
 - **Sign in with an email address or Google**, with password reset. Accounts from the spreadsheet still sign in by username until they add an email.
@@ -76,7 +76,7 @@ Files:
 - **`supabase/migrations/`** — the whole schema, the SM-2 implementation, the plan limits and the RLS policies.
 - **`supabase/functions/`** — the two Edge Functions that talk to Omise.
 - **[SETUP_BILLING.md](SETUP_BILLING.md)** — the keys and dashboard switches the owner has to set.
-- **`supabase/seed/`** — the 3,015-word catalogue as JSON.
+- **`supabase/seed/`** — the word catalogue as JSON: `words_01-07` the original Oxford 3000, `words_08+` 9,718 words from CEFR-J 1.5, Octanove C1/C2 and Words-CEFR-Dataset.
 
 ## Live
 
