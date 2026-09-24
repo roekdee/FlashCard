@@ -135,6 +135,16 @@ function openLesson(id) {
     renderQuestion();
 }
 
+/** The authored answers cluster on the first two options; shuffle so position gives nothing away. */
+function shuffled(items) {
+    const a = [...items];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
 function renderQuestion() {
     const { lesson, index } = quiz;
     const q = lesson.quiz[index];
@@ -144,7 +154,8 @@ function renderQuestion() {
         <h4 class="panel-title">แบบฝึกหัด ${index + 1} / ${lesson.quiz.length}</h4>
         <p class="grammar-question">${esc(before)}<span class="grammar-blank">____</span>${esc(after ?? '')}</p>
         <div class="quiz-options">
-            ${q.options.map((o, i) => `<button class="quiz-option" data-option="${i}">${esc(o)}</button>`).join('')}
+            ${shuffled(q.options.map((o, i) => [o, i]))
+                .map(([o, i]) => `<button class="quiz-option" data-option="${i}">${esc(o)}</button>`).join('')}
         </div>
         <p class="grammar-feedback" id="grammarFeedback"></p>`;
 }
@@ -156,8 +167,7 @@ function answer(choice, btn) {
     const right = choice === q.answer;
     if (right) quiz.score++;
 
-    const opts = $('grammarQuiz').querySelectorAll('.quiz-option');
-    opts[q.answer].classList.add('is-correct');
+    $('grammarQuiz').querySelector(`[data-option="${q.answer}"]`).classList.add('is-correct');
     if (!right) btn.classList.add('is-wrong');
     $('grammarQuiz').querySelector('.quiz-options').classList.add('is-answered');
 
