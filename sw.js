@@ -14,6 +14,8 @@ const SHELL = [
     './app-styles.css',
     './app.js',
     './api.js',
+    './grammar.js',
+    './grammar.json',
     './icon.svg',
     './manifest.webmanifest',
     'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'

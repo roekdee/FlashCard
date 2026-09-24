@@ -7,6 +7,7 @@
  * database refuses the call regardless.
  */
 import * as api from './api.js?v=dev';
+import { initGrammar, showGrammar } from './grammar.js?v=dev';
 
 // ===================== STATE =====================
 const state = {
@@ -36,6 +37,7 @@ const allowedLevels = () => state.stats?.levels || null;
 // ===================== BOOT =====================
 document.addEventListener('DOMContentLoaded', async () => {
     bindAuthUI();
+    bindTheme();
     registerServiceWorker();
     applyPublicConfig();
 
@@ -418,6 +420,8 @@ function bindAppUI() {
         if (btn) answerQuiz(btn);
     });
     $('typingInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') answerTyping(); });
+    $('micBtn').addEventListener('click', listenForWord);
+    initGrammar({ allowedLevels, speak, goPro: () => switchView('pro') });
 
     $('saveGoalBtn').addEventListener('click', saveGoal);
     $('changePasswordBtn').addEventListener('click', changePassword);
@@ -504,6 +508,7 @@ function onKey(e) {
     else if (e.key.toLowerCase() === 's') speak(currentWord()?.word);
     else if (e.key.toLowerCase() === 'n') skipCard();
     else if (e.key.toLowerCase() === 'z' && !$('undoBtn').disabled) undoLast();
+    else if (e.key.toLowerCase() === 'm' && state.mode === 'speak') listenForWord();
     else if (['1', '2', '3', '4'].includes(e.key) && state.mode === 'flip' && state.revealed) {
         grade([1, 3, 4, 5][Number(e.key) - 1]);
     }
@@ -513,11 +518,12 @@ function onKey(e) {
 function switchView(view) {
     document.querySelectorAll('.tab').forEach((t) =>
         t.classList.toggle('is-active', t.dataset.view === view));
-    ['study', 'browse', 'stats', 'rank', 'pro'].forEach((name) =>
+    ['study', 'grammar', 'browse', 'stats', 'rank', 'pro'].forEach((name) =>
         show($(name + 'View'), name === view));
 
     if (view === 'stats') { renderStats(); renderBadges(); }
     if (view === 'rank') renderLeaderboard();
+    if (view === 'grammar') showGrammar();
     if (view === 'pro') renderPro();
     if (view === 'browse' && !$('browseResults').childElementCount) runSearch();
 }
@@ -552,8 +558,9 @@ function applyPlanToUI() {
     show($('heatmapLock'), !pro);
     show($('heatmap'), pro);
     document.querySelector('.heatmap-legend').hidden = !pro;
+    $('newPerDayInput').disabled = pro;
     $('newPerDayHint').textContent = pro
-        ? '“คำใหม่ต่อวัน” คือเพดานคำที่ยังไม่เคยเห็น กันไม่ให้กองทบทวนพอกจนตามไม่ทัน'
+        ? 'Pro ไม่จำกัดคำใหม่ต่อวัน — สุ่มจากคลังทั้งหมดได้เรื่อย ๆ'
         : 'บัญชีฟรีจำกัดคำใหม่ไว้ 10 คำต่อวัน — ตั้งได้สูงกว่านี้เมื่อเป็น Pro';
 }
 
@@ -663,8 +670,12 @@ function showCard() {
     show($('flipControls'), state.mode === 'flip');
     show($('quizOptions'), state.mode === 'quiz');
     show($('typingBox'), state.mode === 'typing');
+    show($('speakBox'), state.mode === 'speak');
     $('typingInput').value = '';
     $('typingFeedback').textContent = '';
+    $('speakFeedback').textContent = '';
+    $('speakFeedback').className = 'typing-feedback';
+    state.speakTries = 0;
 
     if (state.mode === 'quiz') buildQuiz(card);
     if (state.mode === 'typing') $('typingInput').focus();
@@ -745,7 +756,7 @@ function showEmpty() {
     // Say why the queue is empty. Blaming the filter when the real cause is the
     // daily new-card budget sends people to the wrong control.
     const s = state.stats || {};
-    const budgetSpent = (s.new_today ?? 0) >= (s.new_per_day ?? 20);
+    const budgetSpent = s.new_per_day != null && (s.new_today ?? 0) >= s.new_per_day;
     const nothingDue = (s.due_now ?? 0) === 0;
     const anyFilter = state.levels.length || state.pos;
     const free = !isPro();
@@ -753,7 +764,7 @@ function showEmpty() {
     let title, sub, offerPro = false;
     if ((s.remaining ?? 1) <= 0) {
         title = free ? 'เรียนครบทุกคำในระดับฟรีแล้ว!' : 'เรียนครบทุกคำแล้ว!';
-        sub = free ? 'ปลดล็อก B1 และ B2 อีก 1,513 คำด้วย Pro' : 'ไม่เหลือคำใหม่ในคลังอีกแล้ว';
+        sub = free ? 'ปลดล็อกคำระดับ B1–C2 ทั้งหมดด้วย Pro' : 'ไม่เหลือคำใหม่ในคลังอีกแล้ว';
         offerPro = free;
     } else if (nothingDue && budgetSpent) {
         title = 'ครบโควตาคำใหม่ของวันนี้แล้ว';
@@ -903,6 +914,139 @@ function isAcceptableAnswer(guess, translation) {
         (guess.length >= 4 && sense.startsWith(guess) && guess.length / sense.length >= 0.7));
 }
 
+// ===================== SPEAK =====================
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const MAX_SPEAK_TRIES = 3;
+
+/** What the learner should say: the head word without sense notes or markers. */
+const spokenTarget = (word) =>
+    (word || '').toLowerCase().replace(/\([^)]*\)/g, '').replace(/[^a-z\s'-]/g, '').trim();
+
+const letters = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '');
+
+/**
+ * Did any recogniser alternative say the word? The recogniser returns whole
+ * phrases ("an apron", "Apron.") and sometimes a near spelling, so accept the
+ * word as a token, the phrase with spaces removed ("ice cream"), or one letter
+ * off for words of six letters or more.
+ */
+function heardWord(alternatives, word) {
+    const target = spokenTarget(word);
+    const bare = letters(target);
+    if (!bare) return false;
+    return alternatives.some((alt) => {
+        const said = alt.toLowerCase();
+        const tokens = said.split(/[^a-z']+/).filter(Boolean);
+        if (tokens.includes(target) || letters(said) === bare) return true;
+        if (target.includes(' ') && letters(said).includes(bare)) return true;
+        return bare.length >= 6 && tokens.some((t) => editDistance(t, bare) <= 1);
+    });
+}
+
+/** Levenshtein distance, short-circuited to 2 when lengths differ by more than 1. */
+function editDistance(a, b) {
+    if (Math.abs(a.length - b.length) > 1) return 2;
+    const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+        let prev = row[0];
+        row[0] = i;
+        for (let j = 1; j <= b.length; j++) {
+            const tmp = row[j];
+            row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+            prev = tmp;
+        }
+    }
+    return row[b.length];
+}
+
+function listenForWord() {
+    const card = currentWord();
+    const feedback = $('speakFeedback');
+    const btn = $('micBtn');
+    if (!card || btn.classList.contains('is-listening') || state.answering) return;
+
+    if (!SpeechRecognition) {
+        feedback.textContent = 'เบราว์เซอร์นี้ไม่รองรับการฟังเสียง — ใช้ Chrome, Edge หรือ Safari';
+        feedback.className = 'typing-feedback is-wrong';
+        return;
+    }
+
+    const recognizer = new SpeechRecognition();
+    recognizer.lang = 'en-US';
+    recognizer.interimResults = false;
+    recognizer.maxAlternatives = 5;
+
+    let settled = false;
+    const label = btn.firstChild;
+    btn.classList.add('is-listening');
+    label.textContent = '🎙️ กำลังฟัง... ';
+    feedback.textContent = '';
+    feedback.className = 'typing-feedback';
+
+    recognizer.onresult = (e) => {
+        settled = true;
+        judgeSpeech(card, [...e.results[0]].map((r) => r.transcript));
+    };
+    recognizer.onerror = (e) => {
+        settled = true;
+        feedback.className = 'typing-feedback is-wrong';
+        feedback.textContent = e.error === 'not-allowed' || e.error === 'service-not-allowed'
+            ? 'ยังไม่ได้อนุญาตไมโครโฟน — กดอนุญาตที่แถบที่อยู่ของเบราว์เซอร์'
+            : e.error === 'no-speech' ? 'ไม่ได้ยินเสียง ลองพูดอีกครั้ง' : 'ฟังไม่สำเร็จ ลองอีกครั้ง';
+    };
+    recognizer.onend = () => {
+        btn.classList.remove('is-listening');
+        label.textContent = '🎤 กดแล้วพูดคำนี้ ';
+        if (!settled) feedback.textContent = 'ไม่ได้ยินเสียง ลองพูดอีกครั้ง';
+    };
+    try { recognizer.start(); } catch { recognizer.onend(); }
+}
+
+function judgeSpeech(card, alternatives) {
+    if (currentWord()?.id !== card.id) return;          // moved on while listening
+    const feedback = $('speakFeedback');
+    const heard = alternatives[0] || '';
+
+    if (heardWord(alternatives, card.word)) {
+        feedback.textContent = `✅ ถูกต้อง — ได้ยินว่า "${heard}"`;
+        feedback.className = 'typing-feedback is-correct';
+        reveal(true);
+        setTimeout(() => grade(state.speakTries === 0 ? 5 : 4), 1100);
+        return;
+    }
+
+    state.speakTries = (state.speakTries || 0) + 1;
+    feedback.className = 'typing-feedback is-wrong';
+    if (state.speakTries < MAX_SPEAK_TRIES) {
+        feedback.textContent =
+            `❌ ได้ยินว่า "${heard}" — ลองอีกครั้ง (${state.speakTries}/${MAX_SPEAK_TRIES}) · กด 🔊 ฟังตัวอย่าง`;
+        return;
+    }
+    feedback.textContent = `❌ ได้ยินว่า "${heard}" — ข้อนี้นับว่ายังพูดไม่ได้ ไว้ทบทวนใหม่`;
+    reveal(true);
+    speak(card.word);
+    setTimeout(() => grade(1), 2200);
+}
+
+// ===================== THEME =====================
+function bindTheme() {
+    const btn = $('themeBtn');
+    const root = document.documentElement;
+    const dark = () => root.dataset.theme === 'dark' ||
+        (!root.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    const paint = () => {
+        btn.textContent = dark() ? '☀️' : '🌙';
+        document.querySelector('meta[name="theme-color"]').content = dark() ? '#1b1b19' : '#f5f5f0';
+    };
+    btn.addEventListener('click', () => {
+        root.dataset.theme = dark() ? 'light' : 'dark';
+        try { localStorage.setItem('flash_theme', root.dataset.theme); } catch { /* not persisted */ }
+        paint();
+    });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paint);
+    paint();
+}
+
 // ===================== SM-2 PREVIEW =====================
 // Mirrors public.sm2_next in supabase/migrations/0002_sm2_rpc.sql — display only.
 // The database is always the authority; this just labels the buttons.
@@ -957,11 +1101,12 @@ function renderStudyStats() {
     const done = s.today || 0;
     $('goalFill').style.width = Math.min(100, (done / goal) * 100) + '%';
 
-    const cap = s.new_per_day ?? 20;
+    const cap = s.new_per_day;                       // null = no ceiling (Pro)
     const newToday = s.new_today ?? 0;
-    const newLeft = Math.max(0, cap - newToday);
-    $('goalText').textContent =
-        `วันนี้ ${done} / ${goal} คำ${done >= goal ? ' 🎉' : ''} · คำใหม่เหลือ ${newLeft}/${cap}`;
+    const newPart = cap == null
+        ? `คำใหม่วันนี้ ${newToday} · ไม่จำกัด`
+        : `คำใหม่เหลือ ${Math.max(0, cap - newToday)}/${cap}`;
+    $('goalText').textContent = `วันนี้ ${done} / ${goal} คำ${done >= goal ? ' 🎉' : ''} · ${newPart}`;
 }
 
 function renderStats() {
@@ -982,13 +1127,15 @@ function renderStats() {
     if (s.forecast) renderForecast(s.forecast);
 }
 
-const LEVEL_TOTALS = { A1: 751, A2: 751, B1: 767, B2: 727 };
+const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
 function renderLevelBars(byLevel) {
     const box = $('levelBars');
     const levels = allowedLevels();
+    const totals = state.stats?.level_totals || {};
     box.innerHTML = '';
-    Object.entries(LEVEL_TOTALS).forEach(([level, total]) => {
+    LEVELS.filter((level) => totals[level]).forEach((level) => {
+        const total = totals[level];
         const locked = Boolean(levels) && !levels.includes(level);
         const done = byLevel[level] || 0;
         const pct = done ? Math.max(1.5, Math.min(100, (done / total) * 100)) : 0;
