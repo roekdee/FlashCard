@@ -415,3 +415,181 @@ header h1, .login-header h1 {
 
 /* once the meaning is showing, the reveal control has done its job (Space still toggles) */
 .flashcard:has(.translation-content:not([hidden])) .translation-section { display: none; }
+
+/* =============================================================
+   Layout from the design canvas: today block, pill filters, the
+   card's head, and on wide screens a sidebar + card + summary panel.
+   ============================================================= */
+.sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.forecast-bar { background: var(--border-strong); border-radius: 6px 6px 2px 2px; }
+.forecast-day:first-child .forecast-bar { background: var(--primary-color); }
+
+/* ---- today + tiles ---- */
+.study-side { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.today { display: flex; flex-direction: column; gap: 8px; }
+.today-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.today-text { font-size: 0.9375rem; font-weight: 500; }
+.today-text strong { font-weight: 600; }
+.streak-line { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8125rem; color: var(--text-muted); }
+.streak-line .icon { color: var(--primary-color); }
+.streak-line strong { color: var(--text-color); font-weight: 600; }
+.today .goal-bar-track { height: 6px; border-radius: 999px; background: var(--border-color); overflow: hidden; }
+.today .goal-bar-fill { height: 100%; background: var(--success-color); border-radius: 999px; }
+.today-sub { font-size: 0.8125rem; color: var(--text-muted); margin: 0; }
+.study-side .stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+}
+.study-side .stat-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.study-side .stat-label {
+    display: block; min-height: 0; justify-content: flex-start;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.study-side .stat-extra, .side-forecast { display: none; }
+.study-side .banner { margin: 0; }
+
+/* ---- pill filters ---- */
+.filters.pill-row {
+    display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-start;
+    background: transparent; border: 0; padding: 0; margin: 0 0 14px;
+}
+.pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 40px; padding: 0 14px;
+    border-radius: 999px; border: 1px solid var(--border-strong);
+    background: transparent; color: var(--text-color);
+    font-size: 0.875rem; cursor: pointer; position: relative;
+}
+.pill .icon { width: 0.95em; height: 0.95em; color: var(--text-muted); }
+.pill-menu { position: relative; }
+.pill-menu > summary { list-style: none; }
+.pill-menu > summary::-webkit-details-marker { display: none; }
+.pill-menu > summary.pill { background: var(--text-color); border-color: var(--text-color); color: var(--bg-color); font-weight: 500; }
+.pill-menu > summary.pill .icon { color: inherit; }
+.pill-menu[open] > summary .icon { transform: rotate(180deg); }
+.pill-pop {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+    background: var(--card-bg); border: 1px solid var(--border-color);
+    border-radius: var(--radius); box-shadow: var(--shadow-lg);
+    padding: 10px; width: max-content; max-width: min(320px, 90vw);
+}
+.pill-pop .chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.pill-pop .chip { justify-content: center; }
+.pill-select { padding-right: 12px; }
+.pill-select select {
+    appearance: none; -webkit-appearance: none;
+    border: 0; background: transparent; color: inherit;
+    font: inherit; padding: 0; min-height: 0; cursor: pointer;
+    max-width: 11em;
+}
+.pill-select select:focus { outline: none; }
+.pill-select:focus-within { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.pill.chip.is-active { background: var(--success-soft); border-color: var(--success-color); color: var(--success-color); }
+
+/* ---- the card's head ---- */
+.card-front { text-align: left; display: flex; flex-direction: column; gap: 14px; }
+.card-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.card-top .word-meta { margin: 0; }
+.card-top .card-schedule { margin: 0; text-align: right; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.card-title { min-width: 0; }
+.card-head .word { white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.card-pron { margin: 6px 0 0; font-size: 1rem; color: var(--text-muted); }
+.card-head .speak-btn { width: 52px; height: 52px; flex-shrink: 0; font-size: 1.25rem; }
+.flashcard .translation-content { margin-top: 4px; }
+
+/* ---- header buttons: icon + label; phones keep the icon ---- */
+.header-actions .btn .icon { font-size: 1.05rem; }
+@media (max-width: 768px) {
+    .header-actions .btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .header-actions .btn { width: 44px; min-width: 44px; padding: 0; border: 0; background: transparent; }
+    .header-content h1 { font-size: 1.4rem; }
+    .pill { min-height: 36px; padding: 0 12px; font-size: 0.8125rem; }
+    .card-head .speak-btn { width: 48px; height: 48px; }
+}
+
+/* ---- wide screens: sidebar | card | today panel ---- */
+@media (min-width: 1100px) {
+    body { padding: 0; }
+    .app-shell {
+        max-width: 1440px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+        min-height: 100vh;
+        padding: 0;
+    }
+    .app-shell[hidden] { display: none; }
+    .app-side {
+        position: sticky; top: 0; height: 100vh; box-sizing: border-box;
+        display: flex; flex-direction: column; gap: 24px;
+        padding: 28px 18px;
+        border-right: 1px solid var(--border-color);
+    }
+    .app-side header, .app-side .header-content { display: contents; }
+    .app-side .header-content > div:first-child { order: 0; padding: 0 10px; }
+    .app-side .subtitle { display: none; }
+    .app-side h1 { font-size: 1.6rem; margin: 0; }
+    .app-side .tabs {
+        order: 1;
+        flex-direction: column; align-items: stretch; gap: 2px;
+        border: 0; margin: 0; overflow: visible;
+    }
+    .app-side .tab {
+        justify-content: flex-start; gap: 12px;
+        min-height: 44px; padding: 0 12px;
+        border: 0; border-radius: 12px;
+        font-size: 0.9375rem; color: var(--text-color);
+    }
+    .app-side .tab:hover { background: var(--tint); }
+    .app-side .tab.is-active { background: var(--text-color); color: var(--bg-color); font-weight: 500; }
+    .app-side .tab.tab-secondary { min-height: 40px; font-size: 0.875rem; color: var(--text-muted); }
+    .app-side .tab.tab-secondary.is-active { color: var(--bg-color); }
+    .app-side .tab[data-view="browse"] { margin-top: 12px; position: relative; }
+    .app-side .tab[data-view="browse"]::before {
+        content: ""; position: absolute; left: 12px; right: 12px; top: -7px;
+        height: 1px; background: var(--border-color);
+    }
+    .app-side .header-actions {
+        order: 2; margin-top: auto;
+        flex-direction: column; align-items: stretch; gap: 6px;
+    }
+    .app-side .header-actions .btn { justify-content: flex-start; width: 100%; }
+    .app-side .header-actions .btn-theme { width: 44px; justify-content: center; align-self: flex-start; }
+    .app-side .plan-pill { align-self: flex-start; }
+    .app-main { padding: 28px 40px 60px; min-width: 0; }
+    .app-main footer { margin-top: 40px; }
+
+    .study-layout:not([hidden]) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 36px;
+        align-items: start;
+    }
+    .study-main { order: 1; min-width: 0; }
+    .study-side {
+        order: 2; position: sticky; top: 28px; margin: 0;
+        gap: 20px;
+        padding-left: 28px; border-left: 1px solid var(--border-color);
+        min-height: calc(100vh - 88px);
+    }
+    .today-head { flex-direction: column; gap: 4px; }
+    .today-text { font-size: 0.875rem; color: var(--text-muted); }
+    .today-text strong { font-family: var(--font-display); font-size: 2.6rem; color: var(--text-color); margin-right: 4px; }
+    .study-side .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .study-side .stat-extra { display: flex; }
+    .side-forecast:not([hidden]) { display: flex; flex-direction: column; gap: 10px; }
+    .side-forecast .forecast { min-height: 110px; gap: 6px; }
+    .side-forecast .forecast-day { height: 110px; }
+    .side-forecast .forecast-count { display: none; }
+    .study-side .banner { margin-top: auto; flex-direction: column; align-items: stretch; }
+    .flashcard { padding: 36px 44px; border-radius: 28px; }
+    .word { font-size: 5rem; }
+    .card-head { justify-content: flex-start; }
+    .grade-row .btn-grade { min-height: 64px; }
+}
