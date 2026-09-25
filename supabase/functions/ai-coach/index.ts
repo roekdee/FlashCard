@@ -1,6 +1,9 @@
 // AI English coach: checks a learner's sentence, or role-plays a scenario chat.
 // Backed by Gemini (free tier). Quota is enforced in Postgres (consume_ai_quota)
 // before any call to Gemini, so a refused call never touches the model.
+// Answers are cached in public.ai_cache by a hash of the request: a repeat of
+// the same check or the same conversation so far is answered from the table,
+// with no model call and nothing taken from the learner's daily allowance.
 //
 // Secrets (set these in Supabase → Edge Functions → Secrets, not in code):
 //   GEMINI_API_KEY   required — https://aistudio.google.com/apikey
@@ -130,6 +133,18 @@ function parseChat(body: Record<string, unknown>): ChatBody | null {
   return { action: "chat", scenario, level, messages: clean };
 }
 
+/** What identifies a request for caching: whitespace-normalised, case kept (capitals can be the mistake). */
+function cacheText(action: CheckBody | ChatBody): string {
+  const norm = (t: string) => t.replace(/\s+/g, " ").trim();
+  if (action.action === "check") return `check|${norm(action.word).toLowerCase()}|${norm(action.sentence)}`;
+  return `chat|${action.scenario}|${action.level}|` + action.messages.map((m) => `${m.role}:${norm(m.text)}`).join("\n");
+}
+
+async function sha256(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function callGemini(
   apiKey: string, model: string, systemInstruction: string,
   contents: { role: string; parts: { text: string }[] }[], schema: unknown,
@@ -185,10 +200,6 @@ Deno.serve(async (req) => {
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) return json({ error: "ต้องเข้าสู่ระบบก่อน" }, 401);
 
-  const apiKey = Deno.env.get("GEMINI_API_KEY");
-  if (!apiKey) return json({ error: "ยังไม่ได้ตั้งค่า AI โค้ช (GEMINI_API_KEY)" }, 503);
-  const model = Deno.env.get("GEMINI_MODEL") || DEFAULT_MODEL;
-
   let raw: Record<string, unknown>;
   try {
     raw = await req.json();
@@ -202,11 +213,24 @@ Deno.serve(async (req) => {
   else if (raw.action === "chat") action = parseChat(raw);
   if (!action) return json({ error: "bad request body" }, 400);
 
-  // Quota first: a refused call never reaches Gemini.
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  // A request we have answered before costs nothing.
+  const cacheKey = await sha256(cacheText(action));
+  const { data: cached } = await admin.from("ai_cache").select("response").eq("key", cacheKey).maybeSingle();
+  if (cached?.response) {
+    await admin.rpc("bump_ai_cache_hit", { p_key: cacheKey });   // bookkeeping only; a failure here is harmless
+    return json({ ...cached.response, cached: true });
+  }
+
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!apiKey) return json({ error: "ยังไม่ได้ตั้งค่า AI โค้ช (GEMINI_API_KEY)" }, 503);
+  const model = Deno.env.get("GEMINI_MODEL") || DEFAULT_MODEL;
+
+  // Quota next: a refused call never reaches Gemini.
   const { data: remaining, error: quotaError } = await admin.rpc("consume_ai_quota", { p_user: user.id });
   if (quotaError) {
     console.error("consume_ai_quota failed", quotaError);
@@ -236,5 +260,8 @@ Deno.serve(async (req) => {
   }
 
   if (!result) return json({ error: "AI โค้ชตอบไม่สำเร็จ ลองใหม่อีกครั้ง" }, 502);
+  const { error: cacheError } = await admin.from("ai_cache")
+    .upsert({ key: cacheKey, action: action.action, response: result }, { onConflict: "key", ignoreDuplicates: true });
+  if (cacheError) console.error("ai_cache insert failed", cacheError);
   return json({ ...result, remaining });
 });
