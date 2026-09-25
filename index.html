@@ -87,7 +87,7 @@
                 <p class="auth-notice" id="forgotNotice" hidden></p>
                 <button id="forgotSubmitBtn" class="btn btn-primary btn-large">ส่งลิงก์ตั้งรหัสผ่านใหม่</button>
                 <p class="login-hint">
-                    <button type="button" class="link-btn" id="backToLoginBtn">กลับไปเข้าสู่ระบบ</button>
+                    <button type="button" class="link-btn" id="backToLoginBtn"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 18l-6-6 6-6"/></svg> กลับไปเข้าสู่ระบบ</button>
                 </p>
             </div>
         </div>
@@ -110,26 +110,23 @@
     </div>
 
     <!-- ===================== APP ===================== -->
-    <div class="container" id="mainApp" hidden>
+    <div class="container app-shell" id="mainApp" hidden>
+        <aside class="app-side">
         <header>
             <div class="header-content">
                 <div>
-                    <h1>Oxford 3000 Flashcards</h1>
+                    <h1>Oxford 3000</h1>
                     <p class="subtitle">เรียนรู้คำศัพท์อย่างง่ายดาย</p>
                 </div>
                 <div class="header-actions">
                     <span class="plan-pill" id="planPill" hidden>PRO</span>
                     <button id="themeBtn" class="btn btn-secondary btn-theme" title="สลับธีมมืด/สว่าง" aria-label="สลับธีมมืด/สว่าง"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button>
-                    <button id="viewHiddenBtn" class="btn btn-view-hidden">คำที่จำได้แล้ว</button>
-                    <button id="logoutBtn" class="btn btn-logout">ออกจากระบบ</button>
+                    <button id="viewHiddenBtn" class="btn btn-view-hidden" aria-label="คำที่จำได้แล้ว"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 6L9 17l-5-5"/></svg><span class="btn-label">คำที่จำได้แล้ว</span></button>
+                    <button id="logoutBtn" class="btn btn-logout" aria-label="ออกจากระบบ"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg><span class="btn-label">ออกจากระบบ</span></button>
                 </div>
             </div>
         </header>
 
-        <div class="banner" id="emailBanner" hidden>
-            <span>บัญชีนี้ยังไม่มีอีเมลจริง — ถ้าลืมรหัสผ่านจะกู้คืนไม่ได้</span>
-            <button class="btn btn-secondary" id="bannerAddEmail">เพิ่มอีเมล</button>
-        </div>
 
         <nav class="tabs" role="tablist">
             <button class="tab is-active" data-view="study" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="7" width="14" height="13" rx="2.5"/><path d="M7 4h11.5A2.5 2.5 0 0 1 21 6.5V16"/></svg></span><span class="tab-label">ทบทวน</span></button>
@@ -143,28 +140,48 @@
             <button class="tab tab-secondary tab-pro" data-view="pro" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></svg></span><span class="tab-label">Pro</span></button>
             <button class="tab tab-more" data-view="more" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg></span><span class="tab-label">เพิ่มเติม</span></button>
         </nav>
+        </aside>
+
+        <main class="app-main">
+        <div class="banner" id="emailBanner" hidden>
+            <span>บัญชีนี้ยังไม่มีอีเมลจริง — ถ้าลืมรหัสผ่านจะกู้คืนไม่ได้</span>
+            <button class="btn btn-secondary" id="bannerAddEmail">เพิ่มอีเมล</button>
+        </div>
+
 
         <!-- ============ STUDY ============ -->
-        <div id="studyView" class="view">
-            <section class="stats">
-                <div class="stat-item">
-                    <span class="stat-label">ถึงกำหนดทบทวน</span>
-                    <span class="stat-value" id="dueCount">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">เหลือในกองสุ่ม</span>
-                    <span class="stat-value" id="remainingCount">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">จำได้แล้ว</span>
-                    <span class="stat-value" id="hiddenWordsCount">0</span>
-                </div>
-                <div class="stat-item" id="streakTile">
-                    <span class="stat-label">ต่อเนื่อง</span>
-                    <span class="stat-value" id="streakCount">0</span>
-                </div>
-            </section>
-
+        <div id="studyView" class="view study-layout">
+            <aside class="study-side" aria-label="สรุปวันนี้">
+                <section class="today" id="goalBar">
+                    <div class="today-head">
+                        <span class="today-text" id="goalText">วันนี้ทบทวนแล้ว 0 จากเป้า 20</span>
+                        <span class="streak-line" id="streakTile"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3c1 3 4 5 4 9a4 4 0 0 1-8 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 0-8z"/></svg> ต่อเนื่อง <strong id="streakCount">0</strong> วัน</span>
+                    </div>
+                    <div class="goal-bar-track"><div class="goal-bar-fill" id="goalFill"></div></div>
+                    <p class="today-sub" id="goalSub"></p>
+                </section>
+                <section class="stats">
+                    <div class="stat-item">
+                        <span class="stat-label">ถึงรอบ</span>
+                        <span class="stat-value" id="dueCount">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">คำใหม่วันนี้</span>
+                        <span class="stat-value" id="newTodayCount">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">จำได้แล้ว</span>
+                        <span class="stat-value" id="hiddenWordsCount">0</span>
+                    </div>
+                    <div class="stat-item stat-extra">
+                        <span class="stat-label">ในคลัง</span>
+                        <span class="stat-value" id="remainingCount">0</span>
+                    </div>
+                </section>
+                <section class="side-forecast" id="sideForecastBox" hidden>
+                    <h4 class="panel-title">ต้องทบทวน 7 วันข้างหน้า</h4>
+                    <div class="forecast" id="sideForecast"></div>
+                </section>
             <div class="banner banner-level" id="placementBanner" hidden>
                 <span>ยังไม่รู้ว่าอยู่ระดับไหน? วัดระดับ 5 นาที แล้วเริ่มจากคำที่พอดีกับคุณ</span>
                 <span class="banner-actions">
@@ -172,16 +189,17 @@
                     <button class="btn btn-secondary" id="placementDismiss">ไว้ทีหลัง</button>
                 </span>
             </div>
+            </aside>
 
-            <div class="goal-bar" id="goalBar">
-                <div class="goal-bar-track"><div class="goal-bar-fill" id="goalFill"></div></div>
-                <span class="goal-bar-text" id="goalText">วันนี้ 0 / 20 คำ</span>
-            </div>
+            <div class="study-main">
 
-            <section class="filters" id="filters">
-                <div class="filter-row">
-                    <span class="filter-label">ระดับ</span>
-                    <div class="chips" id="levelChips">
+
+
+            <section class="filters pill-row" id="filters" aria-label="ตัวกรอง">
+                <details class="pill-menu" id="levelMenu">
+                    <summary class="pill"><span id="levelSummary">ทุกระดับ</span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></summary>
+                    <div class="pill-pop">
+                        <div class="chips" id="levelChips">
                         <button class="chip" data-level="A1">A1</button>
                         <button class="chip" data-level="A2">A2</button>
                         <button class="chip" data-level="B1">B1</button>
@@ -189,42 +207,45 @@
                         <button class="chip" data-level="C1">C1</button>
                         <button class="chip" data-level="C2">C2</button>
                     </div>
-                </div>
-                <div class="filter-row">
-                    <span class="filter-label">พิเศษ</span>
-                    <div class="chips">
-                        <button class="chip" id="leechChip" title="ฝึกเฉพาะคำที่กดลืมตั้งแต่ 3 ครั้งขึ้นไป">คำที่ลืมบ่อย</button>
                     </div>
-                </div>
-                <div class="filter-row">
-                    <span class="filter-label">ชนิดคำ</span>
-                    <select id="posSelect" class="select-input">
-                        <option value="">ทั้งหมด</option>
-                    </select>
-                    <span class="filter-label">โหมด</span>
-                    <select id="modeSelect" class="select-input">
+                </details>
+                <label class="pill pill-select"><span class="sr-only">โหมด</span>
+                    <select id="modeSelect" >
                         <option value="flip">พลิกการ์ด</option>
                         <option value="quiz">เลือก 4 ตัวเลือก</option>
                         <option value="typing">พิมพ์คำตอบ</option>
                         <option value="speak">พูดออกเสียง</option>
                         <option value="cloze">เติมคำในประโยค</option>
-                        <option value="reverse">ไทย อังกฤษ</option>
+                        <option value="reverse">ไทย → อังกฤษ</option>
                         <option value="dictation">ฟังแล้วเขียน</option>
                         <option value="shadow">พูดตามประโยค</option>
                     </select>
-                </div>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></label>
+                <label class="pill pill-select"><span class="sr-only">ชนิดคำ</span>
+                    <select id="posSelect">
+                        <option value="">ทุกชนิดคำ</option>
+                    </select>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></label>
+                <button class="pill chip" id="leechChip" title="ฝึกเฉพาะคำที่กดลืมตั้งแต่ 3 ครั้งขึ้นไป">คำที่ลืมบ่อย</button>
             </section>
 
             <section class="flashcard-container" id="flashcardContainer">
                 <div class="flashcard" id="flashcard">
                     <div class="card-front">
-                        <h2 class="word" id="word">-</h2>
-                        <div class="word-meta">
-                            <span class="pos-tag" id="posTag">-</span>
-                            <span class="level-tag" id="levelTag">-</span>
+                        <div class="card-top">
+                            <div class="word-meta">
+                                <span class="pos-tag" id="posTag">-</span>
+                                <span class="level-tag" id="levelTag">-</span>
+                            </div>
+                            <p class="card-schedule" id="cardSchedule"></p>
+                        </div>
+                        <div class="card-head">
+                            <div class="card-title">
+                                <h2 class="word" id="word">-</h2>
+                                <p class="card-pron" id="pronunciationText"></p>
+                            </div>
                             <button class="speak-btn" id="speakBtn" title="ออกเสียง (กด S)" aria-label="ออกเสียง"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg></button>
                         </div>
-                        <p class="card-schedule" id="cardSchedule"></p>
                     </div>
 
                     <div class="translation-section" id="flipControls">
@@ -247,16 +268,12 @@
                         <div class="practice-actions">
                             <button class="btn btn-primary btn-mic" id="practiceMic"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg> กดแล้วพูดประโยค</button>
                             <button class="btn btn-primary" id="practiceSubmit">ตรวจคำตอบ</button>
-                            <button class="btn btn-primary" id="practiceNext" hidden>ต่อไป </button>
+                            <button class="btn btn-primary" id="practiceNext" hidden>ต่อไป <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></button>
                         </div>
                         <div class="practice-feedback" id="practiceFeedback"></div>
                     </div>
 
                     <div class="translation-content" id="translationContent" hidden>
-                        <div class="translation">
-                            <strong>คำอ่าน</strong>
-                            <p id="pronunciationText">-</p>
-                        </div>
                         <div class="translation">
                             <strong>ความหมาย</strong>
                             <p id="translationText">-</p>
@@ -316,6 +333,7 @@
                     </div>
                 </div>
             </section>
+            </div>
         </div>
 
         <!-- ============ GRAMMAR ============ -->
@@ -335,7 +353,7 @@
                 <p class="field-hint">รูปประโยคเรียงจากง่าย (A1) ไปยาก (C2) · ถูก 4 ใน 5 ข้อถึงนับว่าผ่าน · บทที่ผ่านแล้วจะกลับมาให้ทบทวนตามรอบ </p>
             </section>
             <section class="panel" id="grammarDue" hidden></section>
-            <button class="btn btn-secondary" id="grammarBack" hidden>กลับไปรายการบทเรียน</button>
+            <button class="btn btn-secondary" id="grammarBack" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 18l-6-6 6-6"/></svg> กลับไปรายการบทเรียน</button>
             <div id="grammarList" class="word-table"></div>
             <div id="grammarDetail" hidden></div>
         </div>
@@ -554,6 +572,7 @@
         <footer>
             <p><span id="currentUsername">-</span> · <span id="connStatus" class="conn-ok">เชื่อมต่อแล้ว</span></p>
         </footer>
+        </main>
     </div>
 
     <!-- ===================== MODAL ===================== -->

@@ -409,7 +409,13 @@ function bindAppUI() {
         if (btn) grade(Number(btn.dataset.grade));
     });
 
-    bindChips('levelChips', (levels) => { state.levels = levels; savePreferences(); startSession(); });
+    bindChips('levelChips', (levels) => {
+        state.levels = levels; savePreferences(); renderLevelSummary(); startSession();
+    });
+    document.addEventListener('click', (e) => {
+        const menu = $('levelMenu');
+        if (menu.open && !menu.contains(e.target)) menu.open = false;
+    });
     bindChips('browseLevelChips', () => runSearch());
 
     $('posSelect').addEventListener('change', (e) => {
@@ -595,6 +601,7 @@ function applyPlanToUI() {
         chip.title = locked ? 'ระดับนี้ใช้ได้เฉพาะสมาชิก Pro' : '';
         if (locked) chip.classList.remove('is-active');
     });
+    renderLevelSummary();
 
     const pro = isPro();
     show($('planPill'), pro);
@@ -630,6 +637,17 @@ function restorePreferences() {
         const chip = $('levelChips').querySelector(`[data-level="${lv}"]`);
         if (chip) chip.classList.add('is-active');
     });
+    renderLevelSummary();
+}
+
+/** The level pill reads like the filter it stands for: "ทุกระดับ", "B1 · B2", "A1–C1". */
+function renderLevelSummary() {
+    const order = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    const picked = order.filter((lv) => state.levels.includes(lv));
+    const contiguous = picked.length > 2 &&
+        order.indexOf(picked.at(-1)) - order.indexOf(picked[0]) === picked.length - 1;
+    $('levelSummary').textContent = !picked.length ? 'ทุกระดับ'
+        : contiguous ? `${picked[0]}–${picked.at(-1)}` : picked.join(' · ');
 }
 
 async function loadPosOptions() {
@@ -717,6 +735,7 @@ function showCard() {
     show($('speakBox'), state.mode === 'speak');
     show($('practiceBox'), PRACTICE_MODES.includes(state.mode));
     show($('speakBtn'), true);
+    show($('pronunciationText'), true);
     state.practice = null;
     if (PRACTICE_MODES.includes(state.mode)) setupPractice(card);
     $('typingInput').value = '';
@@ -1120,6 +1139,7 @@ function setupPractice(card) {
     if ((kind === 'cloze' && !cloze) || (['dictation', 'shadow'].includes(kind) && !hasSentence)) kind = 'reverse';
 
     state.practice = { kind, card, cloze, answered: false, best: null, tries: 0 };
+    show($('pronunciationText'), !['cloze', 'reverse', 'dictation'].includes(kind));
     const wordEl = $('word');
     const input = $('practiceInput');
     const prompt = $('practicePrompt');
@@ -1190,6 +1210,7 @@ function submitPractice() {
     $('word').textContent = headword(card.word);
     $('word').classList.remove('is-prompt');
     show($('speakBtn'), true);
+    show($('pronunciationText'), true);
     reveal(true);
     speak(card.word);
 
@@ -1209,6 +1230,7 @@ function showSentenceResult(result, footer) {
     $('word').textContent = headword(p.card.word);
     $('word').classList.remove('is-prompt');
     show($('speakBtn'), true);
+    show($('pronunciationText'), true);
     $('practiceFeedback').className = 'practice-feedback ' + (result.ratio >= 0.8 ? 'is-correct' : 'is-wrong');
     $('practiceFeedback').innerHTML = `
         <p class="practice-score">${pct >= 80 ? ICON.checkCircle : pct >= 60 ? ICON.alert : ICON.xCircle} ถูก ${pct}%</p>
@@ -1293,6 +1315,7 @@ function applyLevel(level) {
     state.levels = wanted;
     $('levelChips').querySelectorAll('.chip').forEach((chip) =>
         chip.classList.toggle('is-active', wanted.includes(chip.dataset.level)));
+    renderLevelSummary();
     savePreferences();
     switchView('study');
     startSession();
@@ -1344,7 +1367,8 @@ function renderStudyStats() {
     const s = state.stats;
     if (!s) return;
     $('dueCount').textContent = s.due_now ?? 0;
-    $('remainingCount').textContent = Math.max(0, s.remaining ?? 0);
+    $('newTodayCount').textContent = s.new_today ?? 0;
+    $('remainingCount').textContent = Math.max(0, s.remaining ?? 0).toLocaleString('th-TH');
     $('hiddenWordsCount').textContent = s.suspended ?? 0;
     $('streakCount').textContent = s.streak ?? 0;
 
@@ -1358,9 +1382,11 @@ function renderStudyStats() {
         ? `คำใหม่ ${newToday} (ไม่จำกัด)`
         : `คำใหม่เหลือ ${Math.max(0, cap - newToday)}/${cap}`;
     // The goal is a target to aim for, not a limit — say so, or 21/20 reads as a cap.
-    $('goalText').textContent = done >= goal
-        ? `ถึงเป้าวันนี้แล้ว · ทบทวน ${done} คำ (เป้า ${goal}) · ${newPart}`
-        : `เป้าวันนี้ ${done} / ${goal} คำ · ${newPart}`;
+    $('goalText').innerHTML = `วันนี้ทบทวนแล้ว <strong>${Number(done)}</strong> จากเป้า ${Number(goal)}`;
+    $('goalSub').textContent = done >= goal ? `ถึงเป้าวันนี้แล้ว · ${newPart}` : newPart;
+
+    show($('sideForecastBox'), Boolean(s.forecast));
+    if (s.forecast) renderForecast(s.forecast, 'sideForecast');
 }
 
 function renderStats() {
@@ -1437,8 +1463,8 @@ function renderHeatmap(map) {
 }
 
 /** Cards already scheduled for each of the next seven days. */
-function renderForecast(forecast) {
-    const box = $('forecastBars');
+function renderForecast(forecast, boxId = 'forecastBars') {
+    const box = $(boxId);
     box.innerHTML = '';
 
     const days = [];
