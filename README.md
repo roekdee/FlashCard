@@ -85,7 +85,9 @@ Files:
 
 ## Live
 
-**https://oxford3000-flashcards.netlify.app**
+**https://oxford3000-flashcards.pages.dev** — Cloudflare Pages, built from `main` with `bash build.sh`, publishing `dist/`.
+
+The Netlify site (`oxford3000-flashcards.netlify.app`) still builds from `main` when its team has credits; GitHub Pages only redirects to Cloudflare. All three talk to the same Supabase project, so accounts and progress are shared. Supabase Auth's redirect allow-list carries every one of them; its Site URL is the Cloudflare address.
 
 ## Setup
 

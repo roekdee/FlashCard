@@ -1,20 +1,19 @@
-# Build with build.sh (asset version stamps, visible version) and publish dist/
-# to GitHub Pages on every push to main.
-name: Deploy to GitHub Pages
+# The app is hosted on Cloudflare Pages (oxford3000-flashcards.pages.dev), which
+# builds from main with `bash build.sh` and publishes dist/. GitHub Pages only
+# serves a redirect there, for links people saved during the move — GitHub's
+# terms do not allow Pages to host a site that sells something.
+name: GitHub Pages redirect
 
 on:
   push:
     branches: [main]
+    paths: [.github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -23,14 +22,23 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        env:
-          COMMIT_REF: ${{ github.sha }}
-        run: bash build.sh
+      - name: Write redirect page
+        run: |
+          mkdir site
+          cat > site/index.html <<'HTML'
+          <!DOCTYPE html>
+          <html lang="th"><head><meta charset="UTF-8">
+          <meta http-equiv="refresh" content="0; url=https://oxford3000-flashcards.pages.dev/">
+          <link rel="canonical" href="https://oxford3000-flashcards.pages.dev/">
+          <title>ย้ายไปที่ใหม่แล้ว</title></head>
+          <body><p>ย้ายไปที่ <a href="https://oxford3000-flashcards.pages.dev/">oxford3000-flashcards.pages.dev</a> แล้ว</p>
+          <script>location.replace('https://oxford3000-flashcards.pages.dev/' + location.hash);</script>
+          </body></html>
+          HTML
+          cp site/index.html site/404.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: site
       - id: deployment
         uses: actions/deploy-pages@v4
