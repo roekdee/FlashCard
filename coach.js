@@ -166,7 +166,7 @@ async function runCheck() {
     try {
         const res = await api.askCoach({ action: 'check', word, sentence });
         lastResult = res;
-        quota.used = Math.max(0, quota.limit - res.remaining);
+        if (typeof res.remaining === 'number') quota.used = Math.max(0, quota.limit - res.remaining);   // cached answers cost nothing
         renderHeader();
         renderResult();
     } catch (err) {
@@ -325,7 +325,7 @@ async function sendChatMessage() {
         last.correction_th = res.correction_th || '';
         last.suggestion = res.suggestion || '';
         chatHistory.push({ role: 'coach', text: res.reply, correction_th: '', suggestion: '' });
-        quota.used = Math.max(0, quota.limit - res.remaining);
+        if (typeof res.remaining === 'number') quota.used = Math.max(0, quota.limit - res.remaining);   // cached answers cost nothing
         renderHeader();
         renderChatLog();
         deps.speak(res.reply);
