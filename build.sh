@@ -25,11 +25,11 @@ sed -i "s/^const VERSION = .*/const VERSION = 'oxford3000-${VERSION}';/" dist/sw
 COMMIT=${COMMIT_REF:-$(git rev-parse HEAD 2>/dev/null || echo local)}
 sed -i "s/__APP_VERSION__/$(cat APP_VERSION) · ${COMMIT:0:7}/" dist/index.html
 
-# The zip is only for hand-deploying by drag and drop. On Netlify's builder
-# dist/ is published directly, and `python` is not on PATH there, so skip it
-# rather than failing the build over an artefact nobody will download.
+# The zip is only for hand-deploying by drag and drop. On a CI builder (Netlify,
+# GitHub Actions) dist/ is published directly, so skip it rather than failing
+# the build over an artefact nobody will download.
 PY=$(command -v python || command -v python3 || true)
-if [ -n "${NETLIFY:-}" ] || [ -z "$PY" ]; then
+if [ -n "${NETLIFY:-}${CI:-}" ] || [ -z "$PY" ]; then
     echo "built dist/ · asset version ${VERSION}"
 else
     "$PY" -c "import shutil; shutil.make_archive('flashcard-site', 'zip', 'dist')"

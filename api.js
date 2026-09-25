@@ -18,6 +18,13 @@ export const CONFIG = {
     QUEUE_SIZE: 40
 };
 
+/**
+ * Where the app lives, for links that come back to it (OAuth, email confirm,
+ * password reset, payment return). Not location.origin: on GitHub Pages the
+ * app sits under /FlashCard/, and the bare origin is somebody else's 404.
+ */
+export const APP_URL = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+
 export const supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY, {
     auth: {
         persistSession: true,
@@ -86,7 +93,7 @@ export async function signUp({ email, password, username }) {
         password,
         options: {
             data: { username: (username || '').trim().toLowerCase() },
-            emailRedirectTo: window.location.origin
+            emailRedirectTo: APP_URL
         }
     });
     if (error) throw new Error(translateError(error));
@@ -102,14 +109,14 @@ export async function signUp({ email, password, username }) {
 export async function signInWithProvider(provider) {
     const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo: window.location.origin }
+        options: { redirectTo: APP_URL }
     });
     if (error) throw new Error(translateError(error));
 }
 
 export async function sendPasswordReset(email) {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: window.location.origin + '#reset'
+        redirectTo: APP_URL + '#reset'
     });
     if (error) throw new Error(translateError(error));
 }
@@ -124,7 +131,7 @@ export async function setNewPassword(password) {
 export async function changeEmail(email) {
     const { error } = await supabase.auth.updateUser(
         { email: email.trim() },
-        { emailRedirectTo: window.location.origin }
+        { emailRedirectTo: APP_URL }
     );
     if (error) throw new Error(translateError(error));
 }
@@ -252,7 +259,7 @@ export async function createCharge({ plan, method, token }) {
             apikey: CONFIG.SUPABASE_KEY,
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ plan, method, token, return_uri: window.location.origin + '#billing' })
+        body: JSON.stringify({ plan, method, token, return_uri: APP_URL + '#billing' })
     });
 
     const body = await res.json().catch(() => ({}));
