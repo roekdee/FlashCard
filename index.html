@@ -12,6 +12,9 @@
     <link rel="stylesheet" href="styles.css?v=dev">
     <link rel="stylesheet" href="word-meta-styles.css?v=dev">
     <link rel="stylesheet" href="app-styles.css?v=dev">
+    <link rel="stylesheet" href="reading.css?v=dev">
+    <link rel="stylesheet" href="placement.css?v=dev">
+    <link rel="stylesheet" href="coach.css?v=dev">
 </head>
 <body>
     <!-- ===================== AUTH ===================== -->
@@ -127,10 +130,14 @@
         <nav class="tabs" role="tablist">
             <button class="tab is-active" data-view="study" role="tab"><span class="tab-icon" aria-hidden="true">📖</span><span class="tab-label">ทบทวน</span></button>
             <button class="tab" data-view="grammar" role="tab"><span class="tab-icon" aria-hidden="true">📝</span><span class="tab-label">ไวยากรณ์</span></button>
-            <button class="tab" data-view="browse" role="tab"><span class="tab-icon" aria-hidden="true">🔍</span><span class="tab-label">ค้นหาคำ</span></button>
-            <button class="tab" data-view="stats" role="tab"><span class="tab-icon" aria-hidden="true">📊</span><span class="tab-label">สถิติ</span></button>
-            <button class="tab" data-view="rank" role="tab"><span class="tab-icon" aria-hidden="true">🏆</span><span class="tab-label">อันดับ</span></button>
-            <button class="tab tab-pro" data-view="pro" role="tab"><span class="tab-icon" aria-hidden="true">✨</span><span class="tab-label">Pro</span></button>
+            <button class="tab" data-view="reading" role="tab"><span class="tab-icon" aria-hidden="true">📰</span><span class="tab-label">อ่าน</span></button>
+            <button class="tab" data-view="coach" role="tab"><span class="tab-icon" aria-hidden="true">🤖</span><span class="tab-label">AI โค้ช</span></button>
+            <button class="tab tab-secondary" data-view="browse" role="tab"><span class="tab-icon" aria-hidden="true">🔍</span><span class="tab-label">ค้นหาคำ</span></button>
+            <button class="tab tab-secondary" data-view="stats" role="tab"><span class="tab-icon" aria-hidden="true">📊</span><span class="tab-label">สถิติ</span></button>
+            <button class="tab tab-secondary" data-view="level" role="tab"><span class="tab-icon" aria-hidden="true">🎯</span><span class="tab-label">วัดระดับ</span></button>
+            <button class="tab tab-secondary" data-view="rank" role="tab"><span class="tab-icon" aria-hidden="true">🏆</span><span class="tab-label">อันดับ</span></button>
+            <button class="tab tab-secondary tab-pro" data-view="pro" role="tab"><span class="tab-icon" aria-hidden="true">✨</span><span class="tab-label">Pro</span></button>
+            <button class="tab tab-more" data-view="more" role="tab"><span class="tab-icon" aria-hidden="true">☰</span><span class="tab-label">เพิ่มเติม</span></button>
         </nav>
 
         <!-- ============ STUDY ============ -->
@@ -154,6 +161,14 @@
                 </div>
             </section>
 
+            <div class="banner banner-level" id="placementBanner" hidden>
+                <span>🎯 ยังไม่รู้ว่าอยู่ระดับไหน? วัดระดับ 5 นาที แล้วเริ่มจากคำที่พอดีกับคุณ</span>
+                <span class="banner-actions">
+                    <button class="btn btn-primary" data-goto-view="level">วัดระดับ</button>
+                    <button class="btn btn-secondary" id="placementDismiss">ไว้ทีหลัง</button>
+                </span>
+            </div>
+
             <div class="goal-bar" id="goalBar">
                 <div class="goal-bar-track"><div class="goal-bar-fill" id="goalFill"></div></div>
                 <span class="goal-bar-text" id="goalText">วันนี้ 0 / 20 คำ</span>
@@ -172,6 +187,12 @@
                     </div>
                 </div>
                 <div class="filter-row">
+                    <span class="filter-label">พิเศษ</span>
+                    <div class="chips">
+                        <button class="chip" id="leechChip" title="ฝึกเฉพาะคำที่กดลืมตั้งแต่ 3 ครั้งขึ้นไป">🔁 คำที่ลืมบ่อย</button>
+                    </div>
+                </div>
+                <div class="filter-row">
                     <span class="filter-label">ชนิดคำ</span>
                     <select id="posSelect" class="select-input">
                         <option value="">ทั้งหมด</option>
@@ -182,6 +203,10 @@
                         <option value="quiz">เลือก 4 ตัวเลือก</option>
                         <option value="typing">พิมพ์คำตอบ</option>
                         <option value="speak">พูดออกเสียง</option>
+                        <option value="cloze">เติมคำในประโยค</option>
+                        <option value="reverse">ไทย → อังกฤษ</option>
+                        <option value="dictation">ฟังแล้วเขียน</option>
+                        <option value="shadow">พูดตามประโยค</option>
                     </select>
                 </div>
             </section>
@@ -204,6 +229,23 @@
                             <span class="slider"></span>
                         </label>
                         <span class="toggle-label">💬 แสดงคำแปล <kbd>Space</kbd></span>
+                    </div>
+
+                    <div class="practice-box" id="practiceBox" hidden>
+                        <p class="practice-prompt" id="practicePrompt"></p>
+                        <p class="practice-hint" id="practiceHint"></p>
+                        <div class="practice-audio" id="practiceAudio">
+                            <button class="btn btn-secondary" id="practiceListen">🔊 ฟังอีกครั้ง</button>
+                            <button class="btn btn-secondary" id="practiceSlow">🐢 ฟังช้า</button>
+                        </div>
+                        <textarea id="practiceInput" class="select-input practice-input" rows="1"
+                                  autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+                        <div class="practice-actions">
+                            <button class="btn btn-primary btn-mic" id="practiceMic">🎤 กดแล้วพูดประโยค</button>
+                            <button class="btn btn-primary" id="practiceSubmit">ตรวจคำตอบ</button>
+                            <button class="btn btn-primary" id="practiceNext" hidden>ต่อไป →</button>
+                        </div>
+                        <div class="practice-feedback" id="practiceFeedback"></div>
                     </div>
 
                     <div class="translation-content" id="translationContent" hidden>
@@ -229,6 +271,7 @@
                                placeholder="พิมพ์คำแปลภาษาไทย แล้วกด Enter" autocomplete="off">
                         <p class="typing-feedback" id="typingFeedback"></p>
                     </div>
+
 
                     <div class="speak-box" id="speakBox" hidden>
                         <button class="btn btn-primary btn-mic" id="micBtn">🎤 กดแล้วพูดคำนี้ <kbd>M</kbd></button>
@@ -285,11 +328,28 @@
                         <button class="chip" data-level="C2">C2</button>
                     </div>
                 </div>
-                <p class="field-hint">รูปประโยคเรียงจากง่าย (A1) ไปยาก (C2) · ทำแบบฝึกหัดถูก 4 ใน 5 ข้อถึงนับว่าผ่าน</p>
+                <p class="field-hint">รูปประโยคเรียงจากง่าย (A1) ไปยาก (C2) · ถูก 4 ใน 5 ข้อถึงนับว่าผ่าน · บทที่ผ่านแล้วจะกลับมาให้ทบทวนตามรอบ 🔁</p>
             </section>
+            <section class="panel" id="grammarDue" hidden></section>
             <button class="btn btn-secondary" id="grammarBack" hidden>← กลับไปรายการบทเรียน</button>
             <div id="grammarList" class="word-table"></div>
             <div id="grammarDetail" hidden></div>
+        </div>
+
+        <!-- ============ READING / AI COACH / LEVEL CHECK (rendered by their modules) ============ -->
+        <div id="readingView" class="view" hidden><div id="readingRoot"></div></div>
+        <div id="coachView" class="view" hidden><div id="coachRoot"></div></div>
+        <div id="levelView" class="view" hidden><div id="levelRoot"></div></div>
+
+        <!-- ============ MORE (phones: the views that do not fit the bottom bar) ============ -->
+        <div id="moreView" class="view" hidden>
+            <div class="more-list">
+                <button class="more-item" data-goto-view="browse"><span>🔍</span>ค้นหาคำ</button>
+                <button class="more-item" data-goto-view="stats"><span>📊</span>สถิติและการตั้งค่า</button>
+                <button class="more-item" data-goto-view="level"><span>🎯</span>วัดระดับภาษาอังกฤษ</button>
+                <button class="more-item" data-goto-view="rank"><span>🏆</span>อันดับ</button>
+                <button class="more-item" data-goto-view="pro"><span>✨</span>Pro</button>
+            </div>
         </div>
 
         <!-- ============ BROWSE ============ -->

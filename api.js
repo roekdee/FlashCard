@@ -438,3 +438,58 @@ export async function reviewCardResilient(wordId, grade, mode) {
         throw err;
     }
 }
+
+// ===================== LEARNING SYSTEMS (0028) =====================
+export async function getLeechQueue(limit = 40) {
+    return unwrap(await supabase.rpc('get_leech_queue', { p_limit: limit, p_min_lapses: 3 })) || [];
+}
+
+/** A word met while reading goes straight into today's reviews. */
+export async function queueWord(wordId) {
+    return unwrap(await supabase.rpc('queue_word', { p_word_id: wordId }));
+}
+
+export async function getPlacementItems(perLevel = 8) {
+    return unwrap(await supabase.rpc('get_placement_items', { p_per_level: perLevel })) || [];
+}
+
+export async function saveLevelCheck(level, score, vocabSize) {
+    return unwrap(await supabase.rpc('save_level_check', { p_level: level, p_score: score, p_vocab: vocabSize }));
+}
+
+export async function getLevelChecks() {
+    return unwrap(await supabase.rpc('get_level_checks')) || [];
+}
+
+export async function reviewGrammar(lessonId, score, total = 5) {
+    return unwrap(await supabase.rpc('review_grammar', { p_lesson_id: lessonId, p_score: score, p_total: total }));
+}
+
+export async function getGrammarProgress() {
+    return unwrap(await supabase.rpc('get_grammar_progress')) || [];
+}
+
+export async function getAiQuota() {
+    return unwrap(await supabase.rpc('get_ai_quota')) || { limit: 0, used: 0 };
+}
+
+/**
+ * Ask the AI coach (edge function ai-coach). body is { action: 'check' | 'chat', ... }.
+ * Resolves to the function's JSON; throws with a Thai message on quota/config errors.
+ */
+export async function askCoach(body) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('ต้องเข้าสู่ระบบก่อน');
+    const res = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/ai-coach`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: CONFIG.SUPABASE_KEY,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) throw new Error(data.error || 'AI โค้ชตอบไม่สำเร็จ ลองใหม่อีกครั้ง');
+    return data;
+}

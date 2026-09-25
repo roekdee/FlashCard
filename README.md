@@ -21,13 +21,18 @@ What it does:
 
 - **Spaced repetition (SM-2)** — grade each card *ลืม / ยาก / ได้ / ง่าย* and the ease factor, interval and next-due date are recalculated. Each button shows the interval it will give you before you press it.
 - **A cap on new words per day** — the part most SRS clones leave out. Deal yourself forty unseen words today and they all come back tomorrow on top of forty more; the backlog grows until you quit. `new_per_day` stops that.
-- **Three study modes** — flip the card, pick from four meanings, or type the translation.
+- **Eight study modes** — the recognition ones (flip, pick from four meanings, type the Thai, say the word) and four that make you produce English: fill the word missing from its example sentence, Thai → English, dictation (hear the sentence, type it) and shadowing (hear it, say it back, scored word by word).
+- **Leech drill** — the words you have forgotten three times or more, on their own.
+- **Grammar** — 72 sentence patterns from A1 to C2 with Thai explanations and a five-question check each; passed lessons go on the same SM-2 schedule as words so they come back for review.
+- **Graded reading** — 60 short texts, ten per level, with Thai translations, comprehension questions, and tap-any-word lookup that can drop the word into today's reviews.
+- **Level check** — a five-minute CEFR placement test that estimates level and vocabulary size, keeps a history, and points the deck at the right level.
+- **AI coach** — write a sentence with a word and get it corrected and explained in Thai, or role-play eight everyday scenes (restaurant, job interview, doctor…). Gemini's free tier behind an edge function with a per-day quota in Postgres.
 - **Undo** — the last answer can be taken back, schedule and streak included.
 - **Example sentences** — every word carries one, in English and Thai.
 - **Pronunciation** — a Thai phonetic respelling on the card, plus the browser's own speech synthesis; no audio files, no API.
 - **Stats** — a daily goal bar, a review streak, a year-long heatmap, a seven-day forecast of what is coming, and progress per CEFR level.
 - **Filters and search** — study only A1, or only verbs; search all 12,733 words (A1–C2) in English or Thai.
-- **Free and Pro** — Pro opens B1/B2, lifts the new-card cap, adds the quiz and typing modes, the full stats, and the leaderboard. The limits are enforced in SQL, not by hiding buttons.
+- **Free and Pro** — Free gets A1–A2, flip and cloze, 10 new words a day and 5 AI coach calls. Pro opens B1–C2, lifts the new-card cap, adds every study mode, 40 AI coach calls a day, the full stats, and the leaderboard. The limits are enforced in SQL, not by hiding buttons.
 - **Leaderboard and badges** — rank by reviews this week, streak, or words mastered; eleven badges track the long haul.
 - **Sign in with an email address or Google**, with password reset. Accounts from the spreadsheet still sign in by username until they add an email.
 - **Per-user progress, enforced by the database** — row level security means a user's card states and review log are unreadable to anyone else, even with the browser key in hand.
@@ -107,6 +112,12 @@ New accounts are ordinary Supabase Auth: a real email address, or Google. That m
 The four accounts inherited from the spreadsheet have no email, so they keep signing in by username through `legacy_login_email`, which resolves a name to its address **only while that address is still the synthetic `@oxford3000.local` one**. The moment a real email is attached the lookup stops answering, so it can never be used to discover somebody's real address. Those accounts see a banner asking them to add one.
 
 An earlier version let anyone create an account through a `security definer` function that wrote to `auth.users` directly. That is gone.
+
+## AI coach
+
+`supabase/functions/ai-coach` calls Google Gemini. Set `GEMINI_API_KEY` (free from https://aistudio.google.com/apikey) under Supabase → Edge Functions → Secrets; `GEMINI_MODEL` is optional (default `gemini-2.5-flash`). Without the key the coach answers "not configured" and nothing else breaks.
+
+`consume_ai_quota` is charged before Gemini is called, so a refused call never reaches the model: 5 a day on Free, 40 on Pro (`plan_limits.ai_per_day`). On the free tier Google may use prompts to improve its models.
 
 ## Billing
 

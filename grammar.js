@@ -2,15 +2,18 @@
  * Grammar lessons: sentence patterns ranked A1 (easiest) to C2 (hardest).
  *
  * The lessons are static content (grammar.json, built from grammar/*.json), so
- * they load straight from the site and work offline once cached. Which lessons
- * a viewer has passed is a convenience kept in localStorage, not account data.
+ * they load straight from the site and work offline once cached. Progress is
+ * account data: every finished quiz goes through review_grammar, which puts the
+ * lesson on the same SM-2 schedule as the words, so passed lessons come back
+ * for review instead of being done once and forgotten.
  *
  * Free accounts see the same levels as the word deck allows; that gate is
  * cosmetic here because the content is public anyway.
  */
 
+import * as api from './api.js?v=dev';
+
 const PASS_MARK = 4;                       // out of 5 quiz questions
-const DONE_KEY = 'flash_grammar_done';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -20,15 +23,13 @@ let lessons = null;
 let deps = null;
 let level = 'A1';
 let quiz = null;                           // { lesson, index, score, answered }
+let progress = new Map();                  // lesson_id -> grammar_progress row
 
-function loadDone() {
-    try { return new Set(JSON.parse(localStorage.getItem(DONE_KEY) || '[]')); }
-    catch { return new Set(); }
-}
-
-function saveDone(done) {
-    try { localStorage.setItem(DONE_KEY, JSON.stringify([...done])); } catch { /* not kept */ }
-}
+const isPassed = (id) => Boolean(progress.get(id)?.passed_at);
+const isDue = (id) => {
+    const row = progress.get(id);
+    return Boolean(row?.passed_at && row.due_at && new Date(row.due_at) <= new Date());
+};
 
 /**
  * @param {{ allowedLevels: () => string[] | null, speak: (text: string) => void, goPro: () => void }} d
@@ -55,6 +56,10 @@ export function initGrammar(d) {
         if (e.target.closest('#grammarNext')) nextQuestion();
         if (e.target.closest('#grammarRetry')) openLesson(quiz.lesson.id);
     });
+    $('grammarDue').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-lesson]');
+        if (btn) openLesson(btn.dataset.lesson);
+    });
 }
 
 const isLocked = (lv) => {
@@ -74,15 +79,27 @@ export async function showGrammar() {
             return;
         }
     }
+    try {
+        progress = new Map((await api.getGrammarProgress()).map((row) => [row.lesson_id, row]));
+    } catch { /* offline: show the list without progress */ }
     if (!quiz) renderList();
 }
 
+function renderDue() {
+    const due = lessons.filter((l) => isDue(l.id) && !isLocked(l.level));
+    $('grammarDue').innerHTML = due.length ? `
+        <h4 class="panel-title">📅 ถึงรอบทบทวน ${due.length} บท</h4>
+        <div class="chips">${due.map((l) =>
+            `<button class="chip" data-lesson="${esc(l.id)}">${esc(l.level)} · ${esc(l.title)}</button>`).join('')}
+        </div>` : '';
+}
+
 function renderList() {
-    const done = loadDone();
+    renderDue();
     $('grammarLevelChips').querySelectorAll('.chip').forEach((chip) => {
         const lv = chip.dataset.level;
         const all = lessons.filter((l) => l.level === lv);
-        const passed = all.filter((l) => done.has(l.id)).length;
+        const passed = all.filter((l) => isPassed(l.id)).length;
         chip.classList.toggle('is-active', lv === level);
         chip.classList.toggle('is-locked', isLocked(lv));
         chip.textContent = `${lv}${isLocked(lv) ? ' 🔒' : ''} · ${passed}/${all.length}`;
@@ -90,18 +107,19 @@ function renderList() {
 
     $('grammarDetail').hidden = true;
     $('grammarBack').hidden = true;
+    $('grammarDue').hidden = !$('grammarDue').innerHTML;
     $('grammarList').hidden = false;
     $('grammarList').innerHTML = lessons
         .filter((l) => l.level === level)
         .map((l, i) => `
-            <button class="grammar-row${done.has(l.id) ? ' is-done' : ''}" data-lesson="${esc(l.id)}">
+            <button class="grammar-row${isPassed(l.id) ? ' is-done' : ''}" data-lesson="${esc(l.id)}">
                 <span class="grammar-row-num">${i + 1}</span>
                 <span class="grammar-row-main">
                     <strong>${esc(l.title)}</strong>
                     <span>${esc(l.title_th)}</span>
                     <code>${esc(l.pattern)}</code>
                 </span>
-                <span class="grammar-row-state">${done.has(l.id) ? '✅' : '›'}</span>
+                <span class="grammar-row-state">${isDue(l.id) ? '🔁' : isPassed(l.id) ? '✅' : '›'}</span>
             </button>`)
         .join('');
 }
@@ -112,6 +130,7 @@ function openLesson(id) {
     quiz = { lesson, index: 0, score: 0, answered: false };
 
     $('grammarList').hidden = true;
+    $('grammarDue').hidden = true;
     $('grammarBack').hidden = false;
     const box = $('grammarDetail');
     box.hidden = false;
@@ -178,7 +197,7 @@ function answer(choice, btn) {
         <button class="btn btn-primary" id="grammarNext">${last ? 'ดูผล' : 'ข้อต่อไป →'}</button>`;
 }
 
-function nextQuestion() {
+async function nextQuestion() {
     if (quiz.index < quiz.lesson.quiz.length - 1) {
         quiz.index++;
         return renderQuestion();
@@ -186,15 +205,19 @@ function nextQuestion() {
     const { lesson, score } = quiz;
     const total = lesson.quiz.length;
     const passed = score >= PASS_MARK;
-    if (passed) {
-        const done = loadDone();
-        done.add(lesson.id);
-        saveDone(done);
+    let next = '';
+    try {
+        const row = await api.reviewGrammar(lesson.id, score, total);
+        progress.set(lesson.id, row);
+        next = passed ? `จะชวนกลับมาทบทวนอีกใน ${row.interval_days} วัน` : 'บทนี้จะกลับมาให้ทบทวนพรุ่งนี้';
+    } catch (err) {
+        next = 'บันทึกผลไม่สำเร็จ: ' + err.message;
     }
     $('grammarQuiz').innerHTML = `
         <h4 class="panel-title">ผลแบบฝึกหัด</h4>
         <p class="grammar-score">${score} / ${total}</p>
         <p>${passed ? '🎉 ผ่านบทนี้แล้ว' : `ต้องได้อย่างน้อย ${PASS_MARK} ข้อถึงจะผ่าน ลองทบทวนตัวอย่างแล้วทำใหม่`}</p>
+        <p class="field-hint">${esc(next)}</p>
         <div class="secondary-row">
             <button class="btn btn-secondary" id="grammarRetry">ทำใหม่</button>
         </div>`;
