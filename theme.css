@@ -341,9 +341,9 @@ header h1, .login-header h1 {
 :root[data-theme="dark"] .btn-grade-good { color: #10201E; }
 .btn-grade:hover { filter: brightness(0.97); }
 
-.secondary-row .btn { border: 0; background: transparent; color: var(--text-muted); min-height: 44px; }
-.secondary-row .btn:hover { color: var(--text-color); background: var(--tint); }
-.secondary-row #hideBtn { color: var(--success-color); }
+#cardActions .secondary-row .btn { border: 0; background: transparent; color: var(--text-muted); min-height: 44px; }
+#cardActions .secondary-row .btn:hover { color: var(--text-color); background: var(--tint); }
+#cardActions .secondary-row #hideBtn { color: var(--success-color); }
 
 .quiz-option {
     border-radius: var(--radius);
@@ -593,3 +593,62 @@ header h1, .login-header h1 {
     .card-head { justify-content: flex-start; }
     .grade-row .btn-grade { min-height: 64px; }
 }
+
+/* native select lists: the pill is transparent, so give the options the theme's own surface and ink
+   (otherwise dark mode shows light text on the browser's white list) */
+select option, select optgroup { background-color: var(--card-bg); color: var(--text-color); }
+.pill-select select { color-scheme: inherit; }
+
+/* the select itself fills the pill: on phones a tap on the label focuses the
+   select without opening it, so the whole pill has to be the select */
+.pill-select { padding: 0; }
+.pill-select select {
+    height: 100%; min-height: inherit; box-sizing: border-box;
+    padding: 0 34px 0 14px; border-radius: 999px; max-width: 13em;
+}
+.pill-select .icon { position: absolute; right: 12px; pointer-events: none; }
+
+/* ---- fixes from the UI audit (.harness/ui_audit.py, ui_deep.py) ---- */
+/* dark: the right answer sits on light teal, so it needs dark ink (was white, 2.2:1) */
+:root[data-theme="dark"] .quiz-option.is-correct { color: #10201E; }
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .quiz-option.is-correct { color: #10201E; }
+    :root:not([data-theme="light"]) .btn-grade-good { color: #10201E; }
+}
+/* text links used as buttons still need a full tap target */
+.link-btn { min-height: 44px; padding: 0 8px; display: inline-flex; align-items: center; }
+/* the leaderboard opt-in checkbox */
+input[type="checkbox"]:not(.switch input) { width: 22px; height: 22px; accent-color: var(--success-color); }
+/* phones: title and the header icons share one row, as drawn */
+@media (max-width: 768px) {
+    .header-content { flex-wrap: nowrap; }
+    .header-content > div:first-child { min-width: 0; }
+    .header-actions { flex-wrap: nowrap; flex-shrink: 0; gap: 2px; }
+    .header-actions .btn { width: 40px; min-width: 40px; height: 44px; }
+    .header-content h1 { font-size: 1.3rem; white-space: nowrap; }
+    .plan-pill { padding: 2px 8px; font-size: 0.6875rem; }
+}
+
+/* ---- headword size follows the word's length and the screen, so long words
+   shrink instead of breaking mid-word ("Commence / ment") ---- */
+.card-head .word { overflow-wrap: normal; word-break: normal; hyphens: manual; }
+.card-head .word { font-size: min(4.25rem, 12vw); }
+.card-head .word[data-length="long"] { font-size: min(3.4rem, 9vw); }
+.card-head .word[data-length="very-long"] { font-size: min(2.8rem, 7.4vw); }
+.card-head .word[data-length="extra-long"] { font-size: min(2.2rem, 6vw); }
+/* a prompt in place of the word (Thai in reverse mode, an icon in cloze and dictation) */
+.card-head .word.is-prompt { font-size: min(1.75rem, 6.4vw); font-family: var(--font-body); letter-spacing: 0; }
+@media (min-width: 1100px) {
+    .card-head .word { font-size: 5rem; }
+    .card-head .word[data-length="long"] { font-size: 4rem; }
+    .card-head .word[data-length="very-long"] { font-size: 3.3rem; }
+    .card-head .word[data-length="extra-long"] { font-size: 2.6rem; }
+    .card-head .word.is-prompt { font-size: 2rem; }
+}
+
+/* ---- hover states: styles.css paints these for its old grey palette
+   (light text on a mid fill); give them the paper-and-ink versions ---- */
+.btn-secondary:hover { background: var(--tint); color: var(--text-color); border-color: var(--border-strong); }
+.btn-success:hover { background: var(--success-soft); color: var(--success-color); border-color: var(--success-color); }
+.header-actions .btn:hover { background: var(--tint); color: var(--text-color); border-color: var(--border-strong); transform: none; box-shadow: none; }
+.btn-unhide:hover { background: var(--success-color); color: var(--primary-ink); border-color: var(--success-color); }
