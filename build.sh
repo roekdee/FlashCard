@@ -10,7 +10,7 @@ cd "$(dirname "$0")"
 
 rm -rf dist flashcard-site.zip
 mkdir -p dist
-cp index.html privacy.html terms.html app.js api.js grammar.js grammar.json practice.js reading.js reading.json reading.css placement.js placement.css coach.js coach.css promptpay.js styles.css word-meta-styles.css app-styles.css \
+cp index.html privacy.html terms.html app.js api.js icons.js theme.css grammar.js grammar.json practice.js reading.js reading.json reading.css placement.js placement.css coach.js coach.css promptpay.js styles.css word-meta-styles.css app-styles.css \
    sw.js manifest.webmanifest icon.svg icon-maskable.svg dist/
 
 # single page: anything unknown falls back to the app shell

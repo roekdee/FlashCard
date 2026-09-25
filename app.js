@@ -12,6 +12,7 @@ import { initReading, showReading } from './reading.js?v=dev';
 import { initCoach, showCoach } from './coach.js?v=dev';
 import { initLevel, showLevel } from './placement.js?v=dev';
 import { makeCloze, judgeWord, compareSentence, gradeFromRatio, headword } from './practice.js?v=dev';
+import { ICON } from './icons.js?v=dev';
 
 // ===================== STATE =====================
 const state = {
@@ -198,14 +199,14 @@ function setAuthMode(mode) {
         t.classList.toggle('is-active', t.dataset.mode === mode));
 
     show($('usernameGroup'), signup);
-    $('identifierLabel').textContent = '📧 อีเมล';
+    $('identifierLabel').textContent = 'อีเมล';
     $('identifier').type = 'email';
     $('identifier').placeholder = 'you@example.com';
     $('identifierHint').textContent = signup
         ? 'ใช้กู้รหัสผ่านและรับใบเสร็จ'
         : 'บัญชีเดิมใช้ชื่อผู้ใช้ก็ได้';
     $('password').autocomplete = signup ? 'new-password' : 'current-password';
-    $('submitAuthBtn').textContent = signup ? '✨ สมัครสมาชิก' : '🚀 เข้าสู่ระบบ';
+    $('submitAuthBtn').textContent = signup ? 'สมัครสมาชิก' : 'เข้าสู่ระบบ';
     show($('forgotBtn').parentElement, !signup);
     authError('');
     authNotice('');
@@ -237,7 +238,7 @@ async function submitAuth() {
     const btn = $('submitAuthBtn');
     const label = btn.textContent;
     btn.disabled = true;
-    btn.textContent = '🔄 กำลังดำเนินการ...';
+    btn.textContent = 'กำลังดำเนินการ...';
 
     try {
         if (signup) {
@@ -287,7 +288,7 @@ async function sendReset() {
     const btn = $('forgotSubmitBtn');
     const label = btn.textContent;
     btn.disabled = true;
-    btn.textContent = '🔄 กำลังส่ง...';
+    btn.textContent = 'กำลังส่ง...';
     try {
         await api.sendPasswordReset(email);
         // Say the same thing whether or not the address exists, so this cannot
@@ -391,7 +392,7 @@ function bindAppUI() {
     $('emptyUpgradeBtn').addEventListener('click', () => switchView('pro'));
 
     $('logoutBtn').addEventListener('click', async () => {
-        if (!confirm('🚪 ต้องการออกจากระบบใช่หรือไม่?')) return;
+        if (!confirm('ต้องการออกจากระบบใช่หรือไม่?')) return;
         await api.signOut();
         location.reload();
     });
@@ -579,7 +580,7 @@ function applyPlanToUI() {
     [...$('modeSelect').options].forEach((opt) => {
         const locked = !modes.includes(opt.value);
         opt.disabled = locked;
-        opt.textContent = opt.textContent.replace(/ 🔒$/, '') + (locked ? ' 🔒' : '');
+        opt.textContent = opt.textContent.replace(/ \(Pro\)$/, '') + (locked ? ' (Pro)' : '');
     });
     if (!modes.includes(state.mode)) {
         state.mode = 'flip';
@@ -651,7 +652,7 @@ const currentWord = () => state.queue[state.index];
 async function startSession() {
     const btn = $('startBtn');
     btn.disabled = true;
-    btn.textContent = '⏳ กำลังโหลด...';
+    btn.textContent = 'กำลังโหลด...';
 
     try {
         const [queue] = await Promise.all([fetchQueue(), refreshStats()]);
@@ -667,7 +668,7 @@ async function startSession() {
         toast('โหลดคำไม่สำเร็จ: ' + err.message);
     } finally {
         btn.disabled = false;
-        btn.textContent = '🚀 เริ่มทบทวน';
+        btn.textContent = 'เริ่มทบทวน';
     }
 }
 
@@ -692,7 +693,7 @@ function showCard() {
     $('pronunciationText').textContent = card.pronunciation || '—';
     $('translationText').textContent = card.translation || '—';
     $('cardSchedule').textContent = card.is_new
-        ? '✨ คำใหม่'
+        ? 'คำใหม่'
         : `ทบทวนครั้งที่ ${card.repetitions} · ช่วงห่าง ${card.interval_days} วัน`;
 
     const hasExample = Boolean(card.example_en);
@@ -730,7 +731,7 @@ function showCard() {
 
 function setTag(el, value) {
     el.textContent = value || '';
-    el.style.display = value ? 'inline-block' : 'none';
+    el.style.display = value ? 'inline-flex' : 'none';
 }
 
 function reveal(on) {
@@ -806,7 +807,7 @@ function showEmpty() {
     show($('emptyState'), true);
     show($('cardActions'), false);
     show($('startBtn'), true);
-    $('startBtn').textContent = '🔄 โหลดใหม่';
+    $('startBtn').textContent = 'โหลดใหม่';
 
     // Say why the queue is empty. Blaming the filter when the real cause is the
     // daily new-card budget sends people to the wrong control.
@@ -818,8 +819,8 @@ function showEmpty() {
 
     let title, sub, offerPro = false;
     if (state.leech) {
-        title = 'ยังไม่มีคำที่ลืมบ่อย 👍';
-        sub = 'คำที่กด "ลืม" ตั้งแต่ 3 ครั้งขึ้นไปจะมารวมอยู่ที่นี่ · กด 🔁 อีกครั้งเพื่อกลับไปทบทวนปกติ';
+        title = 'ยังไม่มีคำที่ลืมบ่อย ';
+        sub = 'คำที่กด "ลืม" ตั้งแต่ 3 ครั้งขึ้นไปจะมารวมอยู่ที่นี่ · กดปุ่ม "คำที่ลืมบ่อย" อีกครั้งเพื่อกลับไปทบทวนปกติ';
     } else if ((s.remaining ?? 1) <= 0) {
         title = free ? 'เรียนครบทุกคำในระดับฟรีแล้ว!' : 'เรียนครบทุกคำแล้ว!';
         sub = free ? 'ปลดล็อกคำระดับ B1–C2 ทั้งหมดด้วย Pro' : 'ไม่เหลือคำใหม่ในคลังอีกแล้ว';
@@ -939,8 +940,8 @@ function answerTyping() {
     const correct = isAcceptableAnswer(guess, card.translation);
 
     $('typingFeedback').textContent = correct
-        ? '✅ ถูกต้อง'
-        : `❌ คำตอบคือ ${card.translation || '—'}`;
+        ? 'ถูกต้อง'
+        : `คำตอบคือ ${card.translation || '—'}`;
     $('typingFeedback').className = 'typing-feedback ' + (correct ? 'is-correct' : 'is-wrong');
 
     input.disabled = true;
@@ -1036,9 +1037,9 @@ function listenForWord() {
     recognizer.maxAlternatives = 5;
 
     let settled = false;
-    const label = btn.firstChild;
+    const label = btn.querySelector('.mic-label');
     btn.classList.add('is-listening');
-    label.textContent = '🎙️ กำลังฟัง... ';
+    label.innerHTML = `${ICON.mic} กำลังฟัง...`;
     feedback.textContent = '';
     feedback.className = 'typing-feedback';
 
@@ -1055,7 +1056,7 @@ function listenForWord() {
     };
     recognizer.onend = () => {
         btn.classList.remove('is-listening');
-        label.textContent = '🎤 กดแล้วพูดคำนี้ ';
+        label.innerHTML = `${ICON.mic} กดแล้วพูดคำนี้`;
         if (!settled) feedback.textContent = 'ไม่ได้ยินเสียง ลองพูดอีกครั้ง';
     };
     try { recognizer.start(); } catch { recognizer.onend(); }
@@ -1067,7 +1068,7 @@ function judgeSpeech(card, alternatives) {
     const heard = alternatives[0] || '';
 
     if (heardWord(alternatives, card.word)) {
-        feedback.textContent = `✅ ถูกต้อง — ได้ยินว่า "${heard}"`;
+        feedback.textContent = `ถูกต้อง — ได้ยินว่า "${heard}"`;
         feedback.className = 'typing-feedback is-correct';
         reveal(true);
         setTimeout(() => grade(state.speakTries === 0 ? 5 : 4, card.id), 1100);
@@ -1078,10 +1079,10 @@ function judgeSpeech(card, alternatives) {
     feedback.className = 'typing-feedback is-wrong';
     if (state.speakTries < MAX_SPEAK_TRIES) {
         feedback.textContent =
-            `❌ ได้ยินว่า "${heard}" — ลองอีกครั้ง (${state.speakTries}/${MAX_SPEAK_TRIES}) · กด 🔊 ฟังตัวอย่าง`;
+            `ได้ยินว่า "${heard}" — ลองอีกครั้ง (${state.speakTries}/${MAX_SPEAK_TRIES}) · กดปุ่มลำโพงเพื่อฟังตัวอย่าง`;
         return;
     }
-    feedback.textContent = `❌ ได้ยินว่า "${heard}" — ข้อนี้นับว่ายังพูดไม่ได้ ไว้ทบทวนใหม่`;
+    feedback.textContent = `ได้ยินว่า "${heard}" — ข้อนี้นับว่ายังพูดไม่ได้ ไว้ทบทวนใหม่`;
     reveal(true);
     speak(card.word);
     setTimeout(() => grade(1, card.id), 2200);
@@ -1094,7 +1095,7 @@ function bindTheme() {
     const dark = () => root.dataset.theme === 'dark' ||
         (!root.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     const paint = () => {
-        btn.textContent = dark() ? '☀️' : '🌙';
+        btn.innerHTML = dark() ? ICON.sun : ICON.moon;
         document.querySelector('meta[name="theme-color"]').content = dark() ? '#1b1b19' : '#f5f5f0';
     };
     btn.addEventListener('click', () => {
@@ -1136,10 +1137,10 @@ function setupPractice(card) {
     input.rows = kind === 'dictation' ? 3 : 1;
 
     if (kind === 'cloze') {
-        wordEl.textContent = '✍️';
+        wordEl.innerHTML = ICON.pen;
         wordEl.classList.add('is-prompt');
         prompt.innerHTML = `${escapeHtml(cloze.before)}<span class="practice-blank">_____</span>${escapeHtml(cloze.after)}`;
-        hint.textContent = `💡 ${card.translation || ''} · ขึ้นต้นด้วย "${cloze.answer[0]}" · ${cloze.answer.length} ตัวอักษร`;
+        hint.textContent = `${card.translation || ''} · ขึ้นต้นด้วย "${cloze.answer[0]}" · ${cloze.answer.length} ตัวอักษร`;
         input.placeholder = 'พิมพ์คำที่หายไป แล้วกด Enter';
     } else if (kind === 'reverse') {
         wordEl.textContent = card.translation || '—';
@@ -1148,10 +1149,10 @@ function setupPractice(card) {
         hint.textContent = card.pos ? `ชนิดคำ: ${card.pos}` : '';
         input.placeholder = 'พิมพ์คำภาษาอังกฤษ แล้วกด Enter';
     } else if (kind === 'dictation') {
-        wordEl.textContent = '🎧';
+        wordEl.innerHTML = ICON.headphones;
         wordEl.classList.add('is-prompt');
         prompt.textContent = 'ฟังแล้วพิมพ์ประโยคที่ได้ยิน';
-        hint.textContent = card.example_th ? `💡 ${card.example_th}` : '';
+        hint.textContent = card.example_th ? `${card.example_th}` : '';
         input.placeholder = 'พิมพ์ประโยคภาษาอังกฤษที่ได้ยิน';
         playPracticeAudio(0.85);
     } else {
@@ -1178,7 +1179,7 @@ function submitPractice() {
     if (p.kind === 'dictation') {
         const result = compareSentence(card.example_en, guess);
         p.best = result;
-        return showSentenceResult(result, `✍️ ประโยคที่ถูกต้อง: ${card.example_en}`);
+        return showSentenceResult(result, `ประโยคที่ถูกต้อง: ${card.example_en}`);
     }
 
     const expected = p.kind === 'cloze' ? [p.cloze.answer, headword(card.word)] : [headword(card.word)];
@@ -1193,9 +1194,9 @@ function submitPractice() {
     speak(card.word);
 
     feedback.className = 'practice-feedback ' + (verdict === 'wrong' ? 'is-wrong' : 'is-correct');
-    feedback.textContent = verdict === 'exact' ? '✅ ถูกต้อง'
-        : verdict === 'close' ? `🟡 เกือบถูก — สะกดว่า "${answer}"`
-        : `❌ คำตอบคือ "${answer}"`;
+    feedback.textContent = verdict === 'exact' ? 'ถูกต้อง'
+        : verdict === 'close' ? `เกือบถูก — สะกดว่า "${answer}"`
+        : `คำตอบคือ "${answer}"`;
     const value = verdict === 'exact' ? 4 : verdict === 'close' ? 3 : 1;
     setTimeout(() => grade(value, card.id), verdict === 'wrong' ? 2200 : 1100);
 }
@@ -1210,7 +1211,7 @@ function showSentenceResult(result, footer) {
     show($('speakBtn'), true);
     $('practiceFeedback').className = 'practice-feedback ' + (result.ratio >= 0.8 ? 'is-correct' : 'is-wrong');
     $('practiceFeedback').innerHTML = `
-        <p class="practice-score">${pct >= 95 ? '🎉' : pct >= 80 ? '✅' : pct >= 60 ? '🟡' : '❌'} ถูก ${pct}%</p>
+        <p class="practice-score">${pct >= 80 ? ICON.checkCircle : pct >= 60 ? ICON.alert : ICON.xCircle} ถูก ${pct}%</p>
         <p class="practice-diff">${result.words.map((w) =>
             `<span class="${w.hit ? 'is-hit' : 'is-miss'}">${escapeHtml(w.word)}</span>`).join(' ')}</p>
         <p class="field-hint">${escapeHtml(footer)}</p>`;
@@ -1240,7 +1241,7 @@ function listenForSentence() {
     rec.interimResults = false;
     rec.maxAlternatives = 3;
     btn.classList.add('is-listening');
-    btn.textContent = '🎙️ กำลังฟัง...';
+    btn.innerHTML = `${ICON.mic} กำลังฟัง...`;
 
     rec.onresult = (e) => {
         if (state.practice !== p) return;              // moved on while listening
@@ -1261,7 +1262,7 @@ function listenForSentence() {
     };
     rec.onend = () => {
         btn.classList.remove('is-listening');
-        btn.textContent = '🎤 กดแล้วพูดประโยค';
+        btn.innerHTML = `${ICON.mic} กดแล้วพูดประโยค`;
     };
     try { rec.start(); } catch { rec.onend(); }
 }
@@ -1358,7 +1359,7 @@ function renderStudyStats() {
         : `คำใหม่เหลือ ${Math.max(0, cap - newToday)}/${cap}`;
     // The goal is a target to aim for, not a limit — say so, or 21/20 reads as a cap.
     $('goalText').textContent = done >= goal
-        ? `🎉 ถึงเป้าวันนี้แล้ว · ทบทวน ${done} คำ (เป้า ${goal}) · ${newPart}`
+        ? `ถึงเป้าวันนี้แล้ว · ทบทวน ${done} คำ (เป้า ${goal}) · ${newPart}`
         : `เป้าวันนี้ ${done} / ${goal} คำ · ${newPart}`;
 }
 
@@ -1369,7 +1370,7 @@ function renderStats() {
     $('sReview').textContent = s.in_review ?? 0;
     $('sMastered').textContent = s.mastered ?? 0;
     $('sSuspended').textContent = s.suspended ?? 0;
-    $('sStreak').textContent = s.streak ?? '🔒';
+    $('sStreak').textContent = s.streak ?? '—';
     $('sToday').textContent = s.today ?? 0;
 
     $('dailyGoalInput').value = s.daily_goal ?? 20;
@@ -1395,7 +1396,7 @@ function renderLevelBars(byLevel) {
         const row = document.createElement('div');
         row.className = 'level-bar' + (locked ? ' is-locked' : '');
         row.innerHTML = `
-            <span class="level-bar-name">${level}${locked ? ' 🔒' : ''}</span>
+            <span class="level-bar-name">${level}${locked ? ` ${ICON.lock}` : ''}</span>
             <span class="level-bar-track"><span class="level-bar-fill" style="width:${pct.toFixed(2)}%"></span></span>
             <span class="level-bar-value">${done}/${total}</span>`;
         box.appendChild(row);
@@ -1521,10 +1522,10 @@ async function changePassword() {
         await api.changePassword(current, next);
         $('currentPassword').value = '';
         $('newPassword').value = '';
-        hint.textContent = '✅ เปลี่ยนรหัสผ่านแล้ว ครั้งหน้าใช้รหัสใหม่';
+        hint.textContent = 'เปลี่ยนรหัสผ่านแล้ว ครั้งหน้าใช้รหัสใหม่';
         toast('เปลี่ยนรหัสผ่านแล้ว');
     } catch (err) {
-        hint.textContent = '❌ ' + err.message;
+        hint.textContent = '' + err.message;
     } finally {
         btn.disabled = false;
     }
@@ -1538,7 +1539,7 @@ async function saveUsername() {
         applyAccount();
         toast('เปลี่ยนชื่อผู้ใช้แล้ว');
     } catch (err) {
-        $('accountHint').textContent = '❌ ' + err.message;
+        $('accountHint').textContent = '' + err.message;
     }
 }
 
@@ -1551,9 +1552,9 @@ async function saveEmail() {
     try {
         await api.changeEmail(email);
         $('accountHint').textContent =
-            '📧 ส่งลิงก์ยืนยันไปที่อีเมลนั้นแล้ว — กดยืนยันเพื่อให้มีผล';
+            'ส่งลิงก์ยืนยันไปที่อีเมลนั้นแล้ว — กดยืนยันเพื่อให้มีผล';
     } catch (err) {
-        $('accountHint').textContent = '❌ ' + err.message;
+        $('accountHint').textContent = '' + err.message;
     }
 }
 
@@ -1568,8 +1569,8 @@ async function renderLeaderboard() {
     } catch (err) {
         box.innerHTML = `
             <div class="pro-lock is-block">
-                <p>🔒 ${escapeHtml(err.message)}</p>
-                <button class="btn btn-pro" data-goto-pro>✨ ดูแพ็กเกจ</button>
+                <p>${ICON.lock} ${escapeHtml(err.message)}</p>
+                <button class="btn btn-pro" data-goto-pro>ดูแพ็กเกจ</button>
             </div>`;
         box.querySelector('[data-goto-pro]')?.addEventListener('click', () => switchView('pro'));
         return;
@@ -1606,7 +1607,7 @@ async function renderPro() {
     const status = $('proStatus');
     const a = state.account;
     status.textContent = a?.is_pro
-        ? `✅ คุณเป็นสมาชิก Pro ถึง ${formatDate(a.pro_until)}`
+        ? `คุณเป็นสมาชิก Pro ถึง ${formatDate(a.pro_until)}`
         : 'ตอนนี้ใช้แพ็กเกจฟรีอยู่';
 
     if (!state.billing) {
@@ -1631,7 +1632,7 @@ async function renderPro() {
             </button>`).join('');
         if (!cfg.live) {
             $('planGrid').insertAdjacentHTML('afterend',
-                '<p class="field-hint">⚠️ โหมดทดสอบ — ยังไม่ตัดเงินจริง</p>');
+                '<p class="field-hint">โหมดทดสอบ — ยังไม่ตัดเงินจริง</p>');
         }
     }
 
@@ -1717,7 +1718,7 @@ async function pay() {
     if (!state.selectedPlan) return toast('เลือกแพ็กเกจก่อน');
     const btn = $('payBtn');
     btn.disabled = true;
-    btn.textContent = '⏳ กำลังดำเนินการ...';
+    btn.textContent = 'กำลังดำเนินการ...';
 
     try {
         // PromptPay straight to the owner's account: no gateway, so the QR is
@@ -1762,7 +1763,7 @@ async function pay() {
             applyAccount();
             await refreshStats();
             show($('qrBox'), false);
-            toast('🎉 เป็นสมาชิก Pro แล้ว');
+            toast('เป็นสมาชิก Pro แล้ว');
             renderPro();
         } else {
             $('qrStatus').textContent = 'ยังไม่ได้รับการชำระเงิน — ถ้าจ่ายแล้วให้รอสักครู่หรือรีเฟรช';
@@ -1809,7 +1810,7 @@ async function submitSlip() {
 
     const btn = $('slipBtn');
     btn.disabled = true;
-    btn.textContent = '⏳ กำลังตรวจสลิป...';
+    btn.textContent = 'กำลังตรวจสลิป...';
     try {
         const result = await api.verifySlip({ intentId: state.intent.intent_id, file });
 
@@ -1818,7 +1819,7 @@ async function submitSlip() {
             applyAccount();
             await refreshStats();
             show($('qrBox'), false);
-            toast('🎉 เป็นสมาชิก Pro แล้ว');
+            toast('เป็นสมาชิก Pro แล้ว');
             renderPro();
             return;
         }
@@ -1867,7 +1868,7 @@ async function runSearch() {
             <div class="word-row-meta">
                 ${row.level ? `<span class="level-tag">${row.level}</span>` : ''}
                 <span class="status-badge status-${row.status}">${STATUS_TH[row.status] || row.status}</span>
-                ${locked ? '<span class="status-badge">🔒 Pro</span>' : ''}
+                ${locked ? `<span class="status-badge">${ICON.lock} Pro</span>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -1906,7 +1907,7 @@ async function renderSuspended() {
 
     box.innerHTML = `
         <div class="learned-count-badge">
-            <span class="count-icon">🎯</span>
+            <span class="count-icon">${ICON.check}</span>
             <span class="count-text">จำได้แล้ว</span>
             <span class="count-number">${words.length}</span>
         </div>

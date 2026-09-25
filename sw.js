@@ -17,6 +17,8 @@ const SHELL = [
     './grammar.js',
     './grammar.json',
     './practice.js',
+    './icons.js',
+    './theme.css',
     './reading.js',
     './reading.json',
     './reading.css',

@@ -8,6 +8,7 @@
  * client-side from the per-level accuracies and `stats.level_totals`.
  */
 import * as api from './api.js?v=dev';
+import { ICON } from './icons.js?v=dev';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
@@ -151,7 +152,7 @@ function renderQuestion() {
             <div class="placement-progress"><span style="width:${pct}%"></span></div>
             <p class="placement-meta"><span class="level-tag">${esc(level)}</span> ข้อ ${run.itemIndex + 1}/${run.items.length}</p>
             <p class="placement-word">${esc(item.word)}
-                <button class="speak-btn" data-say="${esc(item.word)}" aria-label="ฟังคำนี้">🔊</button></p>
+                <button class="speak-btn" data-say="${esc(item.word)}" aria-label="ฟังคำนี้">${ICON.speaker}</button></p>
             <div class="quiz-options">
                 ${choices.map((c, i) => `<button class="quiz-option" data-idx="${i}">${esc(c.text)}</button>`).join('')}
                 <button class="quiz-option placement-unknown" data-idx="unknown">ไม่รู้จักคำนี้</button>
@@ -217,8 +218,8 @@ async function finishRun() {
 function compareLevel(level, prevLevel) {
     const cur = LEVELS.indexOf(level);
     const prev = LEVELS.indexOf(prevLevel);
-    if (cur > prev) return `ขึ้นจากครั้งก่อน (${esc(prevLevel)} → ${esc(level)}) 📈`;
-    if (cur < prev) return `ลดลงจากครั้งก่อน (${esc(prevLevel)} → ${esc(level)}) 📉`;
+    if (cur > prev) return `ขึ้นจากครั้งก่อน (${esc(prevLevel)} → ${esc(level)}) ${ICON.trendUp}`;
+    if (cur < prev) return `ลดลงจากครั้งก่อน (${esc(prevLevel)} → ${esc(level)}) ${ICON.trendDown}`;
     return `เท่ากับครั้งก่อน (${esc(level)})`;
 }
 

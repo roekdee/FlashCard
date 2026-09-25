@@ -8,20 +8,24 @@
     <title>Oxford 3000 Flashcards</title>
     <script>try { const t = localStorage.getItem('flash_theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
     <link rel="manifest" href="manifest.webmanifest">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="styles.css?v=dev">
     <link rel="stylesheet" href="word-meta-styles.css?v=dev">
     <link rel="stylesheet" href="app-styles.css?v=dev">
     <link rel="stylesheet" href="reading.css?v=dev">
     <link rel="stylesheet" href="placement.css?v=dev">
     <link rel="stylesheet" href="coach.css?v=dev">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="theme.css?v=dev">
 </head>
 <body>
     <!-- ===================== AUTH ===================== -->
     <div id="loginScreen" class="login-screen">
         <div class="login-container">
             <div class="login-header">
-                <h1>🎓 Oxford 3000</h1>
+                <h1>Oxford 3000</h1>
                 <p>Flashcards</p>
             </div>
 
@@ -32,21 +36,21 @@
 
             <div class="login-form" id="authForm">
                 <div class="input-group">
-                    <label for="identifier" id="identifierLabel">📧 อีเมล</label>
+                    <label for="identifier" id="identifierLabel">อีเมล</label>
                     <input type="email" id="identifier" autocomplete="username"
                            placeholder="you@example.com">
                     <p class="field-hint" id="identifierHint">บัญชีเดิมใช้ชื่อผู้ใช้ก็ได้</p>
                 </div>
 
                 <div class="input-group" id="usernameGroup" hidden>
-                    <label for="signupUsername">👤 ชื่อผู้ใช้</label>
+                    <label for="signupUsername">ชื่อผู้ใช้</label>
                     <input type="text" id="signupUsername" autocomplete="nickname"
                            placeholder="a-z, 0-9, _ (3-32 ตัว)">
                     <p class="field-hint" id="usernameHint">ใช้แสดงบนกระดานจัดอันดับ</p>
                 </div>
 
                 <div class="input-group">
-                    <label for="password">🔒 รหัสผ่าน</label>
+                    <label for="password">รหัสผ่าน</label>
                     <input type="password" id="password" autocomplete="current-password"
                            placeholder="อย่างน้อย 8 ตัวอักษร">
                 </div>
@@ -54,7 +58,7 @@
                 <p class="auth-error" id="authError" hidden></p>
                 <p class="auth-notice" id="authNotice" hidden></p>
 
-                <button id="submitAuthBtn" class="btn btn-primary btn-large">🚀 เข้าสู่ระบบ</button>
+                <button id="submitAuthBtn" class="btn btn-primary btn-large">เข้าสู่ระบบ</button>
 
                 <div class="auth-divider" id="oauthDivider" hidden><span>หรือ</span></div>
                 <div id="oauthButtons"></div>
@@ -70,12 +74,12 @@
     <div id="forgotScreen" class="login-screen" hidden>
         <div class="login-container">
             <div class="login-header">
-                <h1>🔑 ลืมรหัสผ่าน</h1>
+                <h1>ลืมรหัสผ่าน</h1>
                 <p class="subtitle">กรอกอีเมลที่ใช้สมัคร เราจะส่งลิงก์ตั้งรหัสผ่านใหม่ไปให้</p>
             </div>
             <div class="login-form">
                 <div class="input-group">
-                    <label for="forgotEmail">📧 อีเมล</label>
+                    <label for="forgotEmail">อีเมล</label>
                     <input type="email" id="forgotEmail" autocomplete="email"
                            placeholder="you@example.com">
                 </div>
@@ -83,7 +87,7 @@
                 <p class="auth-notice" id="forgotNotice" hidden></p>
                 <button id="forgotSubmitBtn" class="btn btn-primary btn-large">ส่งลิงก์ตั้งรหัสผ่านใหม่</button>
                 <p class="login-hint">
-                    <button type="button" class="link-btn" id="backToLoginBtn">← กลับไปเข้าสู่ระบบ</button>
+                    <button type="button" class="link-btn" id="backToLoginBtn">กลับไปเข้าสู่ระบบ</button>
                 </p>
             </div>
         </div>
@@ -92,7 +96,7 @@
     <!-- password recovery, reached from the emailed link -->
     <div id="resetScreen" class="login-screen" hidden>
         <div class="login-container">
-            <div class="login-header"><h1>🔑 ตั้งรหัสผ่านใหม่</h1></div>
+            <div class="login-header"><h1>ตั้งรหัสผ่านใหม่</h1></div>
             <div class="login-form">
                 <div class="input-group">
                     <label for="resetPassword">รหัสผ่านใหม่</label>
@@ -115,9 +119,9 @@
                 </div>
                 <div class="header-actions">
                     <span class="plan-pill" id="planPill" hidden>PRO</span>
-                    <button id="themeBtn" class="btn btn-secondary btn-theme" title="สลับธีมมืด/สว่าง" aria-label="สลับธีมมืด/สว่าง">🌙</button>
-                    <button id="viewHiddenBtn" class="btn btn-view-hidden">🎯 คำที่จำได้แล้ว</button>
-                    <button id="logoutBtn" class="btn btn-logout">👋 ออกจากระบบ</button>
+                    <button id="themeBtn" class="btn btn-secondary btn-theme" title="สลับธีมมืด/สว่าง" aria-label="สลับธีมมืด/สว่าง"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button>
+                    <button id="viewHiddenBtn" class="btn btn-view-hidden">คำที่จำได้แล้ว</button>
+                    <button id="logoutBtn" class="btn btn-logout">ออกจากระบบ</button>
                 </div>
             </div>
         </header>
@@ -128,41 +132,41 @@
         </div>
 
         <nav class="tabs" role="tablist">
-            <button class="tab is-active" data-view="study" role="tab"><span class="tab-icon" aria-hidden="true">📖</span><span class="tab-label">ทบทวน</span></button>
-            <button class="tab" data-view="grammar" role="tab"><span class="tab-icon" aria-hidden="true">📝</span><span class="tab-label">ไวยากรณ์</span></button>
-            <button class="tab" data-view="reading" role="tab"><span class="tab-icon" aria-hidden="true">📰</span><span class="tab-label">อ่าน</span></button>
-            <button class="tab" data-view="coach" role="tab"><span class="tab-icon" aria-hidden="true">🤖</span><span class="tab-label">AI โค้ช</span></button>
-            <button class="tab tab-secondary" data-view="browse" role="tab"><span class="tab-icon" aria-hidden="true">🔍</span><span class="tab-label">ค้นหาคำ</span></button>
-            <button class="tab tab-secondary" data-view="stats" role="tab"><span class="tab-icon" aria-hidden="true">📊</span><span class="tab-label">สถิติ</span></button>
-            <button class="tab tab-secondary" data-view="level" role="tab"><span class="tab-icon" aria-hidden="true">🎯</span><span class="tab-label">วัดระดับ</span></button>
-            <button class="tab tab-secondary" data-view="rank" role="tab"><span class="tab-icon" aria-hidden="true">🏆</span><span class="tab-label">อันดับ</span></button>
-            <button class="tab tab-secondary tab-pro" data-view="pro" role="tab"><span class="tab-icon" aria-hidden="true">✨</span><span class="tab-label">Pro</span></button>
-            <button class="tab tab-more" data-view="more" role="tab"><span class="tab-icon" aria-hidden="true">☰</span><span class="tab-label">เพิ่มเติม</span></button>
+            <button class="tab is-active" data-view="study" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="7" width="14" height="13" rx="2.5"/><path d="M7 4h11.5A2.5 2.5 0 0 1 21 6.5V16"/></svg></span><span class="tab-label">ทบทวน</span></button>
+            <button class="tab" data-view="grammar" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h13"/></svg></span><span class="tab-label">ไวยากรณ์</span></button>
+            <button class="tab" data-view="reading" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 7c-2-1.5-5-2-8-2v13c3 0 6 .5 8 2 2-1.5 5-2 8-2V5c-3 0-6 .5-8 2z"/><path d="M12 7v13"/></svg></span><span class="tab-label">อ่าน</span></button>
+            <button class="tab" data-view="coach" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5h16v11H9l-5 4V5z"/><path d="M9 10h6"/></svg></span><span class="tab-label">AI โค้ช</span></button>
+            <button class="tab tab-secondary" data-view="browse" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></span><span class="tab-label">ค้นหาคำ</span></button>
+            <button class="tab tab-secondary" data-view="stats" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 20V11"/><path d="M12 20V5"/><path d="M19 20v-6"/></svg></span><span class="tab-label">สถิติ</span></button>
+            <button class="tab tab-secondary" data-view="level" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6"/></svg></span><span class="tab-label">วัดระดับ</span></button>
+            <button class="tab tab-secondary" data-view="rank" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 6h3a3 3 0 0 1-3 4"/><path d="M7 6H4a3 3 0 0 0 3 4"/></svg></span><span class="tab-label">อันดับ</span></button>
+            <button class="tab tab-secondary tab-pro" data-view="pro" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></svg></span><span class="tab-label">Pro</span></button>
+            <button class="tab tab-more" data-view="more" role="tab"><span class="tab-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg></span><span class="tab-label">เพิ่มเติม</span></button>
         </nav>
 
         <!-- ============ STUDY ============ -->
         <div id="studyView" class="view">
             <section class="stats">
                 <div class="stat-item">
-                    <span class="stat-label">⏰ ถึงกำหนดทบทวน</span>
+                    <span class="stat-label">ถึงกำหนดทบทวน</span>
                     <span class="stat-value" id="dueCount">0</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-label">📚 เหลือในกองสุ่ม</span>
+                    <span class="stat-label">เหลือในกองสุ่ม</span>
                     <span class="stat-value" id="remainingCount">0</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-label">🎯 จำได้แล้ว</span>
+                    <span class="stat-label">จำได้แล้ว</span>
                     <span class="stat-value" id="hiddenWordsCount">0</span>
                 </div>
                 <div class="stat-item" id="streakTile">
-                    <span class="stat-label">🔥 ต่อเนื่อง</span>
+                    <span class="stat-label">ต่อเนื่อง</span>
                     <span class="stat-value" id="streakCount">0</span>
                 </div>
             </section>
 
             <div class="banner banner-level" id="placementBanner" hidden>
-                <span>🎯 ยังไม่รู้ว่าอยู่ระดับไหน? วัดระดับ 5 นาที แล้วเริ่มจากคำที่พอดีกับคุณ</span>
+                <span>ยังไม่รู้ว่าอยู่ระดับไหน? วัดระดับ 5 นาที แล้วเริ่มจากคำที่พอดีกับคุณ</span>
                 <span class="banner-actions">
                     <button class="btn btn-primary" data-goto-view="level">วัดระดับ</button>
                     <button class="btn btn-secondary" id="placementDismiss">ไว้ทีหลัง</button>
@@ -189,7 +193,7 @@
                 <div class="filter-row">
                     <span class="filter-label">พิเศษ</span>
                     <div class="chips">
-                        <button class="chip" id="leechChip" title="ฝึกเฉพาะคำที่กดลืมตั้งแต่ 3 ครั้งขึ้นไป">🔁 คำที่ลืมบ่อย</button>
+                        <button class="chip" id="leechChip" title="ฝึกเฉพาะคำที่กดลืมตั้งแต่ 3 ครั้งขึ้นไป">คำที่ลืมบ่อย</button>
                     </div>
                 </div>
                 <div class="filter-row">
@@ -204,7 +208,7 @@
                         <option value="typing">พิมพ์คำตอบ</option>
                         <option value="speak">พูดออกเสียง</option>
                         <option value="cloze">เติมคำในประโยค</option>
-                        <option value="reverse">ไทย → อังกฤษ</option>
+                        <option value="reverse">ไทย อังกฤษ</option>
                         <option value="dictation">ฟังแล้วเขียน</option>
                         <option value="shadow">พูดตามประโยค</option>
                     </select>
@@ -218,7 +222,7 @@
                         <div class="word-meta">
                             <span class="pos-tag" id="posTag">-</span>
                             <span class="level-tag" id="levelTag">-</span>
-                            <button class="speak-btn" id="speakBtn" title="ออกเสียง (กด S)" aria-label="ออกเสียง">🔊</button>
+                            <button class="speak-btn" id="speakBtn" title="ออกเสียง (กด S)" aria-label="ออกเสียง"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg></button>
                         </div>
                         <p class="card-schedule" id="cardSchedule"></p>
                     </div>
@@ -228,37 +232,37 @@
                             <input type="checkbox" id="showTranslationToggle">
                             <span class="slider"></span>
                         </label>
-                        <span class="toggle-label">💬 แสดงคำแปล <kbd>Space</kbd></span>
+                        <span class="toggle-label">แตะเพื่อดูความหมาย <kbd>Space</kbd></span>
                     </div>
 
                     <div class="practice-box" id="practiceBox" hidden>
                         <p class="practice-prompt" id="practicePrompt"></p>
                         <p class="practice-hint" id="practiceHint"></p>
                         <div class="practice-audio" id="practiceAudio">
-                            <button class="btn btn-secondary" id="practiceListen">🔊 ฟังอีกครั้ง</button>
-                            <button class="btn btn-secondary" id="practiceSlow">🐢 ฟังช้า</button>
+                            <button class="btn btn-secondary" id="practiceListen"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg> ฟังอีกครั้ง</button>
+                            <button class="btn btn-secondary" id="practiceSlow"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg> ฟังช้า</button>
                         </div>
                         <textarea id="practiceInput" class="select-input practice-input" rows="1"
                                   autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
                         <div class="practice-actions">
-                            <button class="btn btn-primary btn-mic" id="practiceMic">🎤 กดแล้วพูดประโยค</button>
+                            <button class="btn btn-primary btn-mic" id="practiceMic"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg> กดแล้วพูดประโยค</button>
                             <button class="btn btn-primary" id="practiceSubmit">ตรวจคำตอบ</button>
-                            <button class="btn btn-primary" id="practiceNext" hidden>ต่อไป →</button>
+                            <button class="btn btn-primary" id="practiceNext" hidden>ต่อไป </button>
                         </div>
                         <div class="practice-feedback" id="practiceFeedback"></div>
                     </div>
 
                     <div class="translation-content" id="translationContent" hidden>
                         <div class="translation">
-                            <strong>🔊 Pronunciation:</strong>
+                            <strong>คำอ่าน</strong>
                             <p id="pronunciationText">-</p>
                         </div>
                         <div class="translation">
-                            <strong>💬 Meaning:</strong>
+                            <strong>ความหมาย</strong>
                             <p id="translationText">-</p>
                         </div>
                         <div class="translation example-block" id="exampleBlock" hidden>
-                            <strong>📝 Example:</strong>
+                            <strong>ตัวอย่าง</strong>
                             <p class="example-en" id="exampleEn">-</p>
                             <p class="example-th" id="exampleTh">-</p>
                         </div>
@@ -274,41 +278,41 @@
 
 
                     <div class="speak-box" id="speakBox" hidden>
-                        <button class="btn btn-primary btn-mic" id="micBtn">🎤 กดแล้วพูดคำนี้ <kbd>M</kbd></button>
+                        <button class="btn btn-primary btn-mic" id="micBtn"><span class="mic-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg> กดแล้วพูดคำนี้</span> <kbd>M</kbd></button>
                         <p class="typing-feedback" id="speakFeedback"></p>
                     </div>
                 </div>
 
                 <div class="empty-state" id="emptyState" hidden>
-                    <p>🎉</p>
+                    <p class="empty-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 6L9 17l-5-5"/></svg></p>
                     <p id="emptyTitle">ทบทวนครบแล้ววันนี้!</p>
                     <p id="emptySub">กลับมาใหม่เมื่อถึงรอบทบทวนถัดไป</p>
-                    <button class="btn btn-pro" id="emptyUpgradeBtn" hidden>✨ อัปเกรดเป็น Pro</button>
+                    <button class="btn btn-pro" id="emptyUpgradeBtn" hidden>อัปเกรดเป็น Pro</button>
                 </div>
             </section>
 
             <section class="actions">
-                <button id="startBtn" class="btn btn-primary btn-large">🚀 เริ่มทบทวน</button>
+                <button id="startBtn" class="btn btn-primary btn-large">เริ่มทบทวน</button>
 
                 <div class="action-group" id="cardActions" hidden>
                     <div class="grade-row" id="gradeRow">
                         <button class="btn btn-grade btn-grade-again" data-grade="1">
-                            <span class="grade-label">😵 ลืม</span><span class="grade-hint" data-hint="1"></span>
+                            <span class="grade-label">ลืม</span><span class="grade-hint" data-hint="1"></span>
                         </button>
                         <button class="btn btn-grade btn-grade-hard" data-grade="3">
-                            <span class="grade-label">😐 ยาก</span><span class="grade-hint" data-hint="3"></span>
+                            <span class="grade-label">ยาก</span><span class="grade-hint" data-hint="3"></span>
                         </button>
                         <button class="btn btn-grade btn-grade-good" data-grade="4">
-                            <span class="grade-label">🙂 ได้</span><span class="grade-hint" data-hint="4"></span>
+                            <span class="grade-label">ได้</span><span class="grade-hint" data-hint="4"></span>
                         </button>
                         <button class="btn btn-grade btn-grade-easy" data-grade="5">
-                            <span class="grade-label">😎 ง่าย</span><span class="grade-hint" data-hint="5"></span>
+                            <span class="grade-label">ง่าย</span><span class="grade-hint" data-hint="5"></span>
                         </button>
                     </div>
                     <div class="secondary-row">
-                        <button id="hideBtn" class="btn btn-success">🎯 จำได้แล้ว ไม่ต้องถามอีก</button>
-                        <button id="skipBtn" class="btn btn-secondary">➡️ ข้าม</button>
-                        <button id="undoBtn" class="btn btn-secondary" disabled>↩️ ย้อนคำตอบล่าสุด</button>
+                        <button id="hideBtn" class="btn btn-success"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 6L9 17l-5-5"/></svg> จำได้แล้ว ไม่ต้องถามอีก</button>
+                        <button id="skipBtn" class="btn btn-secondary"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg> ข้าม</button>
+                        <button id="undoBtn" class="btn btn-secondary" disabled><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg> ย้อนคำตอบล่าสุด</button>
                     </div>
                 </div>
             </section>
@@ -328,10 +332,10 @@
                         <button class="chip" data-level="C2">C2</button>
                     </div>
                 </div>
-                <p class="field-hint">รูปประโยคเรียงจากง่าย (A1) ไปยาก (C2) · ถูก 4 ใน 5 ข้อถึงนับว่าผ่าน · บทที่ผ่านแล้วจะกลับมาให้ทบทวนตามรอบ 🔁</p>
+                <p class="field-hint">รูปประโยคเรียงจากง่าย (A1) ไปยาก (C2) · ถูก 4 ใน 5 ข้อถึงนับว่าผ่าน · บทที่ผ่านแล้วจะกลับมาให้ทบทวนตามรอบ </p>
             </section>
             <section class="panel" id="grammarDue" hidden></section>
-            <button class="btn btn-secondary" id="grammarBack" hidden>← กลับไปรายการบทเรียน</button>
+            <button class="btn btn-secondary" id="grammarBack" hidden>กลับไปรายการบทเรียน</button>
             <div id="grammarList" class="word-table"></div>
             <div id="grammarDetail" hidden></div>
         </div>
@@ -344,11 +348,11 @@
         <!-- ============ MORE (phones: the views that do not fit the bottom bar) ============ -->
         <div id="moreView" class="view" hidden>
             <div class="more-list">
-                <button class="more-item" data-goto-view="browse"><span>🔍</span>ค้นหาคำ</button>
-                <button class="more-item" data-goto-view="stats"><span>📊</span>สถิติและการตั้งค่า</button>
-                <button class="more-item" data-goto-view="level"><span>🎯</span>วัดระดับภาษาอังกฤษ</button>
-                <button class="more-item" data-goto-view="rank"><span>🏆</span>อันดับ</button>
-                <button class="more-item" data-goto-view="pro"><span>✨</span>Pro</button>
+                <button class="more-item" data-goto-view="browse"><span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></span>ค้นหาคำ</button>
+                <button class="more-item" data-goto-view="stats"><span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 20V11"/><path d="M12 20V5"/><path d="M19 20v-6"/></svg></span>สถิติและการตั้งค่า</button>
+                <button class="more-item" data-goto-view="level"><span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6"/></svg></span>วัดระดับภาษาอังกฤษ</button>
+                <button class="more-item" data-goto-view="rank"><span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 6h3a3 3 0 0 1-3 4"/><path d="M7 6H4a3 3 0 0 0 3 4"/></svg></span>อันดับ</button>
+                <button class="more-item" data-goto-view="pro"><span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></svg></span>Pro</button>
             </div>
         </div>
 
@@ -377,12 +381,12 @@
         <!-- ============ STATS ============ -->
         <div id="statsView" class="view" hidden>
             <section class="stats stats-grid">
-                <div class="stat-item"><span class="stat-label">📖 กำลังเรียน</span><span class="stat-value" id="sLearning">0</span></div>
-                <div class="stat-item"><span class="stat-label">🔁 กำลังทบทวน</span><span class="stat-value" id="sReview">0</span></div>
-                <div class="stat-item"><span class="stat-label">🏆 แม่นแล้ว</span><span class="stat-value" id="sMastered">0</span></div>
-                <div class="stat-item"><span class="stat-label">🎯 จำได้แล้ว</span><span class="stat-value" id="sSuspended">0</span></div>
-                <div class="stat-item"><span class="stat-label">🔥 ต่อเนื่อง</span><span class="stat-value" id="sStreak">0</span></div>
-                <div class="stat-item"><span class="stat-label">📅 วันนี้</span><span class="stat-value" id="sToday">0</span></div>
+                <div class="stat-item"><span class="stat-label">กำลังเรียน</span><span class="stat-value" id="sLearning">0</span></div>
+                <div class="stat-item"><span class="stat-label">กำลังทบทวน</span><span class="stat-value" id="sReview">0</span></div>
+                <div class="stat-item"><span class="stat-label">แม่นแล้ว</span><span class="stat-value" id="sMastered">0</span></div>
+                <div class="stat-item"><span class="stat-label">จำได้แล้ว</span><span class="stat-value" id="sSuspended">0</span></div>
+                <div class="stat-item"><span class="stat-label">ต่อเนื่อง</span><span class="stat-value" id="sStreak">0</span></div>
+                <div class="stat-item"><span class="stat-label">วันนี้</span><span class="stat-value" id="sToday">0</span></div>
             </section>
 
             <section class="panel">
@@ -399,8 +403,8 @@
                 <h3 class="panel-title">คิวทบทวน 7 วันข้างหน้า</h3>
                 <div id="forecastBars" class="forecast"></div>
                 <div class="pro-lock" id="forecastLock" hidden>
-                    <p>🔒 ดูคิวล่วงหน้าได้เมื่อเป็น Pro</p>
-                    <button class="btn btn-pro" data-goto-pro>✨ ดูแพ็กเกจ</button>
+                    <p>ดูคิวล่วงหน้าได้เมื่อเป็น Pro</p>
+                    <button class="btn btn-pro" data-goto-pro>ดูแพ็กเกจ</button>
                 </div>
             </section>
 
@@ -409,8 +413,8 @@
                 <div id="heatmap" class="heatmap"></div>
                 <p class="heatmap-legend"><span>น้อย</span><i class="hm-0"></i><i class="hm-1"></i><i class="hm-2"></i><i class="hm-3"></i><i class="hm-4"></i><span>มาก</span></p>
                 <div class="pro-lock" id="heatmapLock" hidden>
-                    <p>🔒 กราฟย้อนหลังและสถิติต่อเนื่องเป็นของ Pro</p>
-                    <button class="btn btn-pro" data-goto-pro>✨ ดูแพ็กเกจ</button>
+                    <p>กราฟย้อนหลังและสถิติต่อเนื่องเป็นของ Pro</p>
+                    <button class="btn btn-pro" data-goto-pro>ดูแพ็กเกจ</button>
                 </div>
             </section>
 
@@ -479,11 +483,11 @@
             <section class="panel pro-hero" id="proHero">
                 <h3 class="pro-hero-title">Oxford 3000 <span class="plan-pill">PRO</span></h3>
                 <ul class="pro-features">
-                    <li>📚 คลังคำกว่า 12,000 คำ ครบ A1–C2 (ฟรีได้ A1–A2)</li>
-                    <li>♾️ ไม่จำกัดคำใหม่ต่อวัน (ฟรี 10 คำ)</li>
-                    <li>🎲 โหมดเลือก 4 ตัวเลือก พิมพ์คำตอบ และพูดออกเสียง</li>
-                    <li>📊 กราฟย้อนหลัง 1 ปี · คิวล่วงหน้า · วันต่อเนื่อง</li>
-                    <li>🏆 กระดานจัดอันดับและเหรียญตรา</li>
+                    <li>คลังคำกว่า 12,000 คำ ครบ A1–C2 (ฟรีได้ A1–A2)</li>
+                    <li>ไม่จำกัดคำใหม่ต่อวัน (ฟรี 10 คำ)</li>
+                    <li>โหมดเลือก 4 ตัวเลือก พิมพ์คำตอบ และพูดออกเสียง</li>
+                    <li>กราฟย้อนหลัง 1 ปี · คิวล่วงหน้า · วันต่อเนื่อง</li>
+                    <li>กระดานจัดอันดับและเหรียญตรา</li>
                 </ul>
                 <p class="pro-status" id="proStatus"></p>
             </section>
@@ -536,7 +540,7 @@
             </section>
 
             <section class="panel" id="adminPanel" hidden>
-                <h3 class="panel-title">🛠️ สลิปรอตรวจสอบ</h3>
+                <h3 class="panel-title">สลิปรอตรวจสอบ</h3>
                 <p class="field-hint">เทียบยอดกับที่เข้าบัญชีจริงก่อนกดอนุมัติ</p>
                 <div id="adminQueue" class="word-table"></div>
             </section>
@@ -548,7 +552,7 @@
         </div>
 
         <footer>
-            <p>👤 <span id="currentUsername">-</span> · <span id="connStatus" class="conn-ok">เชื่อมต่อแล้ว</span></p>
+            <p><span id="currentUsername">-</span> · <span id="connStatus" class="conn-ok">เชื่อมต่อแล้ว</span></p>
         </footer>
     </div>
 
@@ -556,7 +560,7 @@
     <div id="hiddenModal" class="modal" hidden>
         <div class="modal-content">
             <div class="modal-header">
-                <h2>🎯 คำที่จำได้แล้ว</h2>
+                <h2>คำที่จำได้แล้ว</h2>
                 <button class="modal-close" id="closeModalBtn" aria-label="ปิด">&times;</button>
             </div>
             <div class="modal-search">

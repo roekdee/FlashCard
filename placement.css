@@ -2,9 +2,9 @@
 
 .placement-progress {
     height: 6px;
-    background: var(--bg-color);
+    background: var(--tint);
     border: 1px solid var(--border-color);
-    border-radius: 2px;
+    border-radius: 999px;
     overflow: hidden;
     margin-bottom: 16px;
 }
@@ -26,6 +26,7 @@
 }
 
 .placement-word {
+    font-family: var(--font-display);
     display: flex;
     align-items: center;
     gap: 10px;
@@ -46,6 +47,7 @@
 }
 
 .placement-badge-level {
+    font-family: var(--font-display);
     font-size: 3rem;
     font-weight: 700;
     line-height: 1;
