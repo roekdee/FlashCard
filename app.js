@@ -520,6 +520,7 @@ function switchView(view) {
         t.classList.toggle('is-active', t.dataset.view === view));
     ['study', 'grammar', 'browse', 'stats', 'rank', 'pro'].forEach((name) =>
         show($(name + 'View'), name === view));
+    window.scrollTo(0, 0);            // the bottom tab bar on phones sits far below the top
 
     if (view === 'stats') { renderStats(); renderBadges(); }
     if (view === 'rank') renderLeaderboard();
