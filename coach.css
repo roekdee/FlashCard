@@ -1,0 +1,194 @@
+/* ===================== AI COACH ===================== */
+.coach-header { margin-bottom: 14px; }
+
+.coach-quota {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+.coach-quota strong { color: var(--primary-color); }
+
+.coach-subtabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.coach-subtabs .btn { flex: 1 1 160px; }
+
+/* ---------- แต่งประโยค ---------- */
+.coach-word-input { width: 100%; margin-top: 10px; }
+
+.coach-sentence {
+    width: 100%;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.6;
+}
+
+.coach-result-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.coach-score {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--primary-color);
+}
+
+.coach-ok { color: var(--success-color); }
+.coach-bad { color: var(--danger-color); }
+
+.coach-field-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 14px;
+    margin-bottom: 4px;
+}
+
+.coach-corrected {
+    font-size: 1.0625rem;
+    line-height: 1.6;
+}
+
+.coach-feedback {
+    margin-top: 12px;
+    line-height: 1.7;
+}
+
+.coach-tips {
+    margin: 8px 0 0;
+    padding-left: 20px;
+    color: var(--text-muted);
+    line-height: 1.7;
+}
+
+.coach-better {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1.6;
+}
+
+/* ---------- ฝึกสนทนา ---------- */
+.coach-scenario-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.coach-scenario-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
+    padding: 16px 10px;
+    font-family: inherit;
+    font-size: 0.8125rem;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.15s ease;
+}
+.coach-scenario-card:hover { border-color: var(--primary-color); transform: translateY(-1px); }
+.coach-scenario-emoji { font-size: 1.75rem; }
+
+.coach-level-label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.coach-chat-panel { display: flex; flex-direction: column; }
+
+.coach-chat-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.coach-chat-log {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 55vh;
+    overflow-y: auto;
+    padding-right: 2px;
+    margin-bottom: 12px;
+}
+
+.coach-bubble { display: flex; max-width: 85%; }
+
+.coach-bubble-coach {
+    align-self: flex-start;
+    align-items: flex-start;
+    gap: 8px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
+    padding: 10px 12px;
+    line-height: 1.6;
+}
+
+.coach-bubble-user {
+    align-self: flex-end;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.coach-bubble-learner {
+    background: var(--primary-color);
+    color: var(--card-bg);
+    border-radius: 2px;
+    padding: 10px 12px;
+    line-height: 1.6;
+}
+
+.coach-bubble-note {
+    background: var(--warning-color);
+    color: var(--card-bg);
+    border-radius: 2px;
+    padding: 8px 10px;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    max-width: 100%;
+}
+.coach-bubble-note p { margin: 0; }
+.coach-suggestion { margin-top: 4px !important; opacity: 0.92; }
+
+.coach-chat-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.coach-chat-input { flex: 1; }
+.coach-mic-btn { flex-shrink: 0; }
+
+/* ---------- phones: keep the chat input above the bottom tab bar ---------- */
+@media (max-width: 640px) {
+    .coach-chat-panel { padding-bottom: 4px; }
+    .coach-chat-input-row {
+        position: sticky;
+        bottom: calc(64px + env(safe-area-inset-bottom));
+        background: var(--card-bg);
+        padding: 8px 0 2px;
+    }
+    .coach-scenario-grid { grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); }
+}
+
+@media (max-width: 360px) {
+    .coach-subtabs .btn { flex: 1 1 100%; }
+}

@@ -8,6 +8,10 @@
  */
 import * as api from './api.js?v=dev';
 import { initGrammar, showGrammar } from './grammar.js?v=dev';
+import { initReading, showReading } from './reading.js?v=dev';
+import { initCoach, showCoach } from './coach.js?v=dev';
+import { initLevel, showLevel } from './placement.js?v=dev';
+import { makeCloze, judgeWord, compareSentence, gradeFromRatio, headword } from './practice.js?v=dev';
 
 // ===================== STATE =====================
 const state = {
@@ -25,8 +29,16 @@ const state = {
     selectedPlan: null,
     payMethod: 'promptpay',
     intent: null,
-    rankMetric: 'week'
+    rankMetric: 'week',
+    leech: false,
+    placementLevel: null,
+    practice: null
 };
+
+// Modes that make the learner produce English rather than recognise it.
+const PRACTICE_MODES = ['cloze', 'reverse', 'dictation', 'shadow'];
+// Views reached through "more" on phones, where the bottom bar has no room.
+const SECONDARY_VIEWS = ['browse', 'stats', 'level', 'rank', 'pro'];
 
 const $ = (id) => document.getElementById(id);
 const show = (el, on) => { if (el) el.hidden = !on; };
@@ -333,6 +345,7 @@ async function enterApp() {
 
     bindAppUI();
     restorePreferences();
+    loadPlacement();
 
     const [account] = await Promise.all([
         api.getAccount().catch(() => null),
@@ -422,6 +435,32 @@ function bindAppUI() {
     $('typingInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') answerTyping(); });
     $('micBtn').addEventListener('click', listenForWord);
     initGrammar({ allowedLevels, speak, goPro: () => switchView('pro') });
+    initReading({ speak, toast, isPro, allowedLevels, goPro: () => switchView('pro') });
+    initCoach({ speak, toast, isPro, goPro: () => switchView('pro'), placementLevel: () => state.placementLevel });
+    initLevel({ speak, toast, applyLevel });
+
+    document.addEventListener('click', (e) => {
+        const go = e.target.closest('[data-goto-view]');
+        if (go) switchView(go.dataset.gotoView);
+    });
+    $('placementDismiss').addEventListener('click', () => {
+        try { localStorage.setItem('flash_placement_later', '1'); } catch { /* shown again next time */ }
+        show($('placementBanner'), false);
+    });
+    $('leechChip').addEventListener('click', () => {
+        state.leech = !state.leech;
+        $('leechChip').classList.toggle('is-active', state.leech);
+        startSession();
+    });
+
+    $('practiceSubmit').addEventListener('click', submitPractice);
+    $('practiceNext').addEventListener('click', finishPractice);
+    $('practiceMic').addEventListener('click', listenForSentence);
+    $('practiceListen').addEventListener('click', () => playPracticeAudio(0.9));
+    $('practiceSlow').addEventListener('click', () => playPracticeAudio(0.6));
+    $('practiceInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitPractice(); }
+    });
 
     $('saveGoalBtn').addEventListener('click', saveGoal);
     $('changePasswordBtn').addEventListener('click', changePassword);
@@ -504,8 +543,9 @@ function onKey(e) {
     if (e.target.matches('input, select, textarea')) return;
     if ($('mainApp').hidden || $('studyView').hidden || !state.queue.length) return;
 
-    if (e.key === ' ') { e.preventDefault(); reveal(!state.revealed); }
-    else if (e.key.toLowerCase() === 's') speak(currentWord()?.word);
+    const hidingWord = ['cloze', 'reverse', 'dictation'].includes(state.mode) && !state.practice?.answered;
+    if (e.key === ' ' && !PRACTICE_MODES.includes(state.mode)) { e.preventDefault(); reveal(!state.revealed); }
+    else if (e.key.toLowerCase() === 's' && !hidingWord) speak(currentWord()?.word);
     else if (e.key.toLowerCase() === 'n') skipCard();
     else if (e.key.toLowerCase() === 'z' && !$('undoBtn').disabled) undoLast();
     else if (e.key.toLowerCase() === 'm' && state.mode === 'speak') listenForWord();
@@ -517,14 +557,18 @@ function onKey(e) {
 // ===================== VIEWS =====================
 function switchView(view) {
     document.querySelectorAll('.tab').forEach((t) =>
-        t.classList.toggle('is-active', t.dataset.view === view));
-    ['study', 'grammar', 'browse', 'stats', 'rank', 'pro'].forEach((name) =>
+        t.classList.toggle('is-active', t.dataset.view === view ||
+            (t.dataset.view === 'more' && SECONDARY_VIEWS.includes(view))));
+    ['study', 'grammar', 'reading', 'coach', 'browse', 'stats', 'level', 'rank', 'pro', 'more'].forEach((name) =>
         show($(name + 'View'), name === view));
     window.scrollTo(0, 0);            // the bottom tab bar on phones sits far below the top
 
     if (view === 'stats') { renderStats(); renderBadges(); }
     if (view === 'rank') renderLeaderboard();
     if (view === 'grammar') showGrammar();
+    if (view === 'reading') showReading();
+    if (view === 'coach') showCoach();
+    if (view === 'level') showLevel();
     if (view === 'pro') renderPro();
     if (view === 'browse' && !$('browseResults').childElementCount) runSearch();
 }
@@ -610,10 +654,7 @@ async function startSession() {
     btn.textContent = '⏳ กำลังโหลด...';
 
     try {
-        const [queue] = await Promise.all([
-            api.getQueue({ levels: state.levels, pos: state.pos ? [state.pos] : null }),
-            refreshStats()
-        ]);
+        const [queue] = await Promise.all([fetchQueue(), refreshStats()]);
         state.queue = queue;
         state.index = 0;
 
@@ -640,6 +681,7 @@ function showCard() {
     const word = card.word || '-';
     const wordEl = $('word');
     wordEl.textContent = word.charAt(0).toUpperCase() + word.slice(1);
+    wordEl.classList.remove('is-prompt');
     wordEl.removeAttribute('data-length');
     if (word.length > 15) wordEl.dataset.length = 'extra-long';
     else if (word.length > 12) wordEl.dataset.length = 'very-long';
@@ -672,6 +714,10 @@ function showCard() {
     show($('quizOptions'), state.mode === 'quiz');
     show($('typingBox'), state.mode === 'typing');
     show($('speakBox'), state.mode === 'speak');
+    show($('practiceBox'), PRACTICE_MODES.includes(state.mode));
+    show($('speakBtn'), true);
+    state.practice = null;
+    if (PRACTICE_MODES.includes(state.mode)) setupPractice(card);
     $('typingInput').value = '';
     $('typingFeedback').textContent = '';
     $('speakFeedback').textContent = '';
@@ -693,10 +739,16 @@ function reveal(on) {
     show($('translationContent'), on);
 }
 
-async function grade(value) {
+/**
+ * Record a grade for the current card. Answers that grade after a short delay
+ * pass the id of the card they judged: if the learner skipped or switched mode
+ * in the meantime, the grade belongs to a card that is no longer showing and
+ * is dropped instead of landing on whichever card is current now.
+ */
+async function grade(value, expectedId = null) {
     if (state.answering) return;
     const card = currentWord();
-    if (!card) return;
+    if (!card || (expectedId && card.id !== expectedId)) return;
 
     state.answering = true;
     const wordId = card.id;
@@ -737,10 +789,12 @@ function skipCard() {
     showCard();
 }
 
+const fetchQueue = () => (state.leech
+    ? api.getLeechQueue()
+    : api.getQueue({ levels: state.levels, pos: state.pos ? [state.pos] : null }));
+
 async function reloadQueue() {
-    const queue = await api.getQueue({
-        levels: state.levels, pos: state.pos ? [state.pos] : null
-    }).catch(() => []);
+    const queue = await fetchQueue().catch(() => []);
     state.queue = queue;
     state.index = 0;
     await refreshStats();
@@ -763,7 +817,10 @@ function showEmpty() {
     const free = !isPro();
 
     let title, sub, offerPro = false;
-    if ((s.remaining ?? 1) <= 0) {
+    if (state.leech) {
+        title = 'ยังไม่มีคำที่ลืมบ่อย 👍';
+        sub = 'คำที่กด "ลืม" ตั้งแต่ 3 ครั้งขึ้นไปจะมารวมอยู่ที่นี่ · กด 🔁 อีกครั้งเพื่อกลับไปทบทวนปกติ';
+    } else if ((s.remaining ?? 1) <= 0) {
         title = free ? 'เรียนครบทุกคำในระดับฟรีแล้ว!' : 'เรียนครบทุกคำแล้ว!';
         sub = free ? 'ปลดล็อกคำระดับ B1–C2 ทั้งหมดด้วย Pro' : 'ไม่เหลือคำใหม่ในคลังอีกแล้ว';
         offerPro = free;
@@ -859,6 +916,7 @@ function answerQuiz(btn) {
     box.classList.add('is-answered');
 
     const correct = btn.dataset.correct === 'true';
+    const cardId = currentWord()?.id;
     box.querySelectorAll('.quiz-option').forEach((el) => {
         if (el.dataset.correct === 'true') el.classList.add('is-correct');
         else if (el === btn) el.classList.add('is-wrong');
@@ -866,7 +924,7 @@ function answerQuiz(btn) {
 
     setTimeout(() => {
         box.classList.remove('is-answered');
-        grade(correct ? 4 : 1);
+        grade(correct ? 4 : 1, cardId);
     }, correct ? 550 : 1400);
 }
 
@@ -888,7 +946,7 @@ function answerTyping() {
     input.disabled = true;
     setTimeout(() => {
         input.disabled = false;
-        grade(correct ? 4 : 1);
+        grade(correct ? 4 : 1, card.id);
     }, correct ? 700 : 1800);
 }
 
@@ -1012,7 +1070,7 @@ function judgeSpeech(card, alternatives) {
         feedback.textContent = `✅ ถูกต้อง — ได้ยินว่า "${heard}"`;
         feedback.className = 'typing-feedback is-correct';
         reveal(true);
-        setTimeout(() => grade(state.speakTries === 0 ? 5 : 4), 1100);
+        setTimeout(() => grade(state.speakTries === 0 ? 5 : 4, card.id), 1100);
         return;
     }
 
@@ -1026,7 +1084,7 @@ function judgeSpeech(card, alternatives) {
     feedback.textContent = `❌ ได้ยินว่า "${heard}" — ข้อนี้นับว่ายังพูดไม่ได้ ไว้ทบทวนใหม่`;
     reveal(true);
     speak(card.word);
-    setTimeout(() => grade(1), 2200);
+    setTimeout(() => grade(1, card.id), 2200);
 }
 
 // ===================== THEME =====================
@@ -1046,6 +1104,197 @@ function bindTheme() {
     });
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paint);
     paint();
+}
+
+// ===================== PRACTICE MODES =====================
+// cloze: type the word missing from its example sentence
+// reverse: see the Thai, type the English
+// dictation: hear the sentence, type it
+// shadow: hear the sentence, say it back
+function setupPractice(card) {
+    let kind = state.mode;
+    const hasSentence = Boolean(card.example_en);
+    const cloze = kind === 'cloze' ? makeCloze(card.example_en, card.word) : null;
+    // A card whose sentence cannot carry the exercise falls back to Thai → English.
+    if ((kind === 'cloze' && !cloze) || (['dictation', 'shadow'].includes(kind) && !hasSentence)) kind = 'reverse';
+
+    state.practice = { kind, card, cloze, answered: false, best: null, tries: 0 };
+    const wordEl = $('word');
+    const input = $('practiceInput');
+    const prompt = $('practicePrompt');
+    const hint = $('practiceHint');
+
+    input.value = '';
+    input.disabled = false;
+    $('practiceFeedback').innerHTML = '';
+    show($('practiceSubmit'), kind !== 'shadow');
+    show($('practiceNext'), false);
+    show($('practiceMic'), kind === 'shadow');
+    show(input, kind !== 'shadow');
+    show($('practiceAudio'), kind === 'dictation' || kind === 'shadow');
+    show($('speakBtn'), kind === 'shadow');
+    input.rows = kind === 'dictation' ? 3 : 1;
+
+    if (kind === 'cloze') {
+        wordEl.textContent = '✍️';
+        wordEl.classList.add('is-prompt');
+        prompt.innerHTML = `${escapeHtml(cloze.before)}<span class="practice-blank">_____</span>${escapeHtml(cloze.after)}`;
+        hint.textContent = `💡 ${card.translation || ''} · ขึ้นต้นด้วย "${cloze.answer[0]}" · ${cloze.answer.length} ตัวอักษร`;
+        input.placeholder = 'พิมพ์คำที่หายไป แล้วกด Enter';
+    } else if (kind === 'reverse') {
+        wordEl.textContent = card.translation || '—';
+        wordEl.classList.add('is-prompt');
+        prompt.textContent = 'คำนี้ภาษาอังกฤษคืออะไร?';
+        hint.textContent = card.pos ? `ชนิดคำ: ${card.pos}` : '';
+        input.placeholder = 'พิมพ์คำภาษาอังกฤษ แล้วกด Enter';
+    } else if (kind === 'dictation') {
+        wordEl.textContent = '🎧';
+        wordEl.classList.add('is-prompt');
+        prompt.textContent = 'ฟังแล้วพิมพ์ประโยคที่ได้ยิน';
+        hint.textContent = card.example_th ? `💡 ${card.example_th}` : '';
+        input.placeholder = 'พิมพ์ประโยคภาษาอังกฤษที่ได้ยิน';
+        playPracticeAudio(0.85);
+    } else {
+        prompt.textContent = card.example_en;
+        hint.textContent = card.example_th || '';
+        playPracticeAudio(0.9);
+    }
+    if (kind !== 'shadow') setTimeout(() => input.focus(), 50);
+}
+
+function playPracticeAudio(rate) {
+    const p = state.practice;
+    if (p) speak(p.card.example_en, rate);
+}
+
+function submitPractice() {
+    const p = state.practice;
+    if (!p || p.answered || state.answering) return;
+    const guess = $('practiceInput').value.trim();
+    if (!guess) return;
+    const { card } = p;
+    const feedback = $('practiceFeedback');
+
+    if (p.kind === 'dictation') {
+        const result = compareSentence(card.example_en, guess);
+        p.best = result;
+        return showSentenceResult(result, `✍️ ประโยคที่ถูกต้อง: ${card.example_en}`);
+    }
+
+    const expected = p.kind === 'cloze' ? [p.cloze.answer, headword(card.word)] : [headword(card.word)];
+    const verdict = judgeWord(guess, expected);
+    const answer = p.kind === 'cloze' ? p.cloze.answer : headword(card.word);
+    p.answered = true;
+    $('practiceInput').disabled = true;
+    $('word').textContent = headword(card.word);
+    $('word').classList.remove('is-prompt');
+    show($('speakBtn'), true);
+    reveal(true);
+    speak(card.word);
+
+    feedback.className = 'practice-feedback ' + (verdict === 'wrong' ? 'is-wrong' : 'is-correct');
+    feedback.textContent = verdict === 'exact' ? '✅ ถูกต้อง'
+        : verdict === 'close' ? `🟡 เกือบถูก — สะกดว่า "${answer}"`
+        : `❌ คำตอบคือ "${answer}"`;
+    const value = verdict === 'exact' ? 4 : verdict === 'close' ? 3 : 1;
+    setTimeout(() => grade(value, card.id), verdict === 'wrong' ? 2200 : 1100);
+}
+
+function showSentenceResult(result, footer) {
+    const p = state.practice;
+    p.answered = true;
+    const pct = Math.round(result.ratio * 100);
+    $('practiceInput').disabled = true;
+    $('word').textContent = headword(p.card.word);
+    $('word').classList.remove('is-prompt');
+    show($('speakBtn'), true);
+    $('practiceFeedback').className = 'practice-feedback ' + (result.ratio >= 0.8 ? 'is-correct' : 'is-wrong');
+    $('practiceFeedback').innerHTML = `
+        <p class="practice-score">${pct >= 95 ? '🎉' : pct >= 80 ? '✅' : pct >= 60 ? '🟡' : '❌'} ถูก ${pct}%</p>
+        <p class="practice-diff">${result.words.map((w) =>
+            `<span class="${w.hit ? 'is-hit' : 'is-miss'}">${escapeHtml(w.word)}</span>`).join(' ')}</p>
+        <p class="field-hint">${escapeHtml(footer)}</p>`;
+    reveal(true);
+    show($('practiceSubmit'), false);
+    show($('practiceNext'), true);
+}
+
+function finishPractice() {
+    const p = state.practice;
+    if (!p?.best || state.answering) return;
+    grade(gradeFromRatio(p.best.ratio), p.card.id);
+}
+
+function listenForSentence() {
+    const p = state.practice;
+    const btn = $('practiceMic');
+    const feedback = $('practiceFeedback');
+    if (!p || btn.classList.contains('is-listening')) return;
+    if (!SpeechRecognition) {
+        feedback.className = 'practice-feedback is-wrong';
+        feedback.textContent = 'เบราว์เซอร์นี้ไม่รองรับการฟังเสียง — ใช้ Chrome, Edge หรือ Safari';
+        return;
+    }
+    const rec = new SpeechRecognition();
+    rec.lang = 'en-US';
+    rec.interimResults = false;
+    rec.maxAlternatives = 3;
+    btn.classList.add('is-listening');
+    btn.textContent = '🎙️ กำลังฟัง...';
+
+    rec.onresult = (e) => {
+        if (state.practice !== p) return;              // moved on while listening
+        const best = [...e.results[0]]
+            .map((alt) => compareSentence(p.card.example_en, alt.transcript))
+            .sort((a, b) => b.ratio - a.ratio)[0];
+        p.tries++;
+        if (!p.best || best.ratio > p.best.ratio) p.best = best;
+        showSentenceResult(p.best,
+            `ได้ยินว่า: "${e.results[0][0].transcript}" · พูดใหม่ได้เพื่อเก็บคะแนนที่ดีที่สุด (ครั้งที่ ${p.tries})`);
+        show($('practiceMic'), true);
+    };
+    rec.onerror = (e) => {
+        feedback.className = 'practice-feedback is-wrong';
+        feedback.textContent = e.error === 'not-allowed' || e.error === 'service-not-allowed'
+            ? 'ยังไม่ได้อนุญาตไมโครโฟน — กดอนุญาตที่แถบที่อยู่ของเบราว์เซอร์'
+            : 'ไม่ได้ยินเสียง ลองพูดอีกครั้ง';
+    };
+    rec.onend = () => {
+        btn.classList.remove('is-listening');
+        btn.textContent = '🎤 กดแล้วพูดประโยค';
+    };
+    try { rec.start(); } catch { rec.onend(); }
+}
+
+// ===================== PLACEMENT =====================
+async function loadPlacement() {
+    try {
+        const checks = await api.getLevelChecks();
+        state.placementLevel = checks[0]?.level || null;
+        let later = false;
+        try { later = localStorage.getItem('flash_placement_later') === '1'; } catch { /* ignore */ }
+        show($('placementBanner'), !checks.length && !later);
+    } catch { /* the banner is optional */ }
+}
+
+/** From the level check: study that level (and the one above it, if allowed). */
+function applyLevel(level) {
+    const order = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    const allowed = allowedLevels();
+    const wanted = [level, order[order.indexOf(level) + 1]].filter(Boolean)
+        .filter((lv) => !allowed || allowed.includes(lv));
+    state.placementLevel = level;
+    show($('placementBanner'), false);
+    if (!wanted.length) {
+        toast('คำระดับนี้ใช้ได้เฉพาะสมาชิก Pro');
+        return switchView('pro');
+    }
+    state.levels = wanted;
+    $('levelChips').querySelectorAll('.chip').forEach((chip) =>
+        chip.classList.toggle('is-active', wanted.includes(chip.dataset.level)));
+    savePreferences();
+    switchView('study');
+    startSession();
 }
 
 // ===================== SM-2 PREVIEW =====================
@@ -1705,7 +1954,7 @@ if (window.speechSynthesis) {
     speechSynthesis.onvoiceschanged = () => { englishVoice = null; pickVoice(); };
 }
 
-function speak(text) {
+function speak(text, rate = 0.9) {
     if (!text || !window.speechSynthesis) return;
     // "bank (money)" is a disambiguator for the reader, not something to say
     const spoken = text.replace(/\s*\([^)]*\)/g, '').trim();
@@ -1715,7 +1964,7 @@ function speak(text) {
     const voice = pickVoice();
     if (voice) utter.voice = voice;
     utter.lang = voice?.lang || 'en-US';
-    utter.rate = 0.9;
+    utter.rate = rate;
     speechSynthesis.speak(utter);
 }
 
