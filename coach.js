@@ -13,14 +13,14 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const SCENARIOS = [
-    { id: 'restaurant', emoji: '🍽️', title: 'ร้านอาหาร', opener: "Hi there! Welcome in. How many people, and do you have a table in mind?" },
-    { id: 'job_interview', emoji: '💼', title: 'สัมภาษณ์งาน', opener: "Thanks for coming in today. So, tell me a little about yourself." },
-    { id: 'hotel', emoji: '🏨', title: 'เข้าพักโรงแรม', opener: "Good evening, welcome to the hotel! Do you have a reservation with us?" },
-    { id: 'directions', emoji: '🧭', title: 'ถามทาง', opener: "Oh, hi! You look a bit lost — is there somewhere I can help you find?" },
-    { id: 'shopping', emoji: '🛍️', title: 'ซื้อของ', opener: "Hello! Let me know if you need any help finding something today." },
-    { id: 'doctor', emoji: '🩺', title: 'พบแพทย์', opener: "Good morning, please have a seat. So, what brings you in today?" },
-    { id: 'small_talk', emoji: '💬', title: 'พูดคุยทั่วไป', opener: "Hey, long time no see! How have you been lately?" },
-    { id: 'meeting', emoji: '📊', title: 'ประชุมงาน', opener: "Alright, thanks for joining — shall we start with your update?" },
+    { id: 'restaurant', emoji: '🍽️', title: 'ร้านอาหาร', openers: ["Hello! Table for one? Please sit here.", "Hi there! Welcome in. How many people, and do you have a table in mind?", "Good evening, and welcome. We're rather busy tonight, but I can offer you a quiet corner or a seat by the window \u2014 which would you prefer?"] },
+    { id: 'job_interview', emoji: '💼', title: 'สัมภาษณ์งาน', openers: ["Hello. Please sit down. What is your name?", "Thanks for coming in today. So, tell me a little about yourself.", "Thanks for making the time. Before we dig into your CV, I'd love to hear what drew you to this role in particular."] },
+    { id: 'hotel', emoji: '🏨', title: 'เข้าพักโรงแรม', openers: ["Hello! Welcome. Do you have a room booking?", "Good evening, welcome to the hotel! Do you have a reservation with us?", "Good evening and welcome. I can see we've got a reservation under your name \u2014 would you like me to walk you through what's included in your stay?"] },
+    { id: 'directions', emoji: '🧭', title: 'ถามทาง', openers: ["Hi! Are you lost? Where do you want to go?", "Oh, hi! You look a bit lost \u2014 is there somewhere I can help you find?", "Excuse me \u2014 you seem to be searching for something. Can I point you in the right direction, or are you just taking in the neighbourhood?"] },
+    { id: 'shopping', emoji: '🛍️', title: 'ซื้อของ', openers: ["Hello! Can I help you? What do you want to buy?", "Hello! Let me know if you need any help finding something today.", "Hi there \u2014 just browsing, or is there something specific you've got your eye on? We've had a few new arrivals this week."] },
+    { id: 'doctor', emoji: '🩺', title: 'พบแพทย์', openers: ["Hello. Please sit down. Are you sick today?", "Good morning, please have a seat. So, what brings you in today?", "Good morning, do take a seat. I've had a look at your notes, but I'd rather hear it from you \u2014 what's been bothering you lately?"] },
+    { id: 'small_talk', emoji: '💬', title: 'พูดคุยทั่วไป', openers: ["Hi! How are you today?", "Hey, long time no see! How have you been lately?", "Well, look who it is! It feels like ages since we last caught up \u2014 what have you been up to?"] },
+    { id: 'meeting', emoji: '📊', title: 'ประชุมงาน', openers: ["Hello everyone. Let's start. How is your work this week?", "Alright, thanks for joining \u2014 shall we start with your update?", "Right, let's make a start, since we've got a lot to get through. Could you bring us up to speed on where things stand with your project?"] },
 ];
 
 let deps = null;
@@ -257,13 +257,18 @@ function renderChat() {
     setupMic(body.querySelector('#coachMicBtn'), input);
 }
 
+/** The scripted first line, in the register of the chosen level (A1-A2, B1-B2, C1-C2). */
+const openerFor = (scenario, level) =>
+    scenario.openers[level.startsWith('A') ? 0 : level.startsWith('B') ? 1 : 2];
+
 function startScenario(id) {
     const scenario = SCENARIOS.find((s) => s.id === id);
     if (!scenario) return;
     chatScenario = id;
-    chatHistory = [{ role: 'coach', text: scenario.opener, correction_th: '', suggestion: '' }];
+    const opener = openerFor(scenario, chatLevel);
+    chatHistory = [{ role: 'coach', text: opener, correction_th: '', suggestion: '' }];
     renderChat();
-    deps.speak(scenario.opener);
+    deps.speak(opener);
 }
 
 function renderChatLog() {
