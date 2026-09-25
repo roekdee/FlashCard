@@ -962,10 +962,16 @@ kbd {
 body { contain: none; }
 .tab-icon { margin-right: 6px; }
 .tab-more { display: none; }
-.tabs { flex-wrap: wrap; }
-.tab { padding: 10px 12px; }
+/* nine tabs on a desktop row: one line that scrolls sideways, never a second row */
+.tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { padding: 10px 12px; white-space: nowrap; flex: none; }
+@media (max-width: 1000px) and (min-width: 769px) {
+    .tab { padding: 10px 7px; font-size: 0.8125rem; }
+    .tab-icon { margin-right: 4px; }
+}
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
     body { padding: 12px 12px calc(76px + env(safe-area-inset-bottom)); }
 
     /* header: title and actions share one compact block */
@@ -1072,7 +1078,7 @@ body { contain: none; }
 .practice-audio, .practice-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .practice-input { width: 100%; padding: 12px 14px; font-size: 1rem; resize: vertical; font-family: inherit; }
 .practice-input[rows="1"] { resize: none; overflow: hidden; }
-.banner-actions .btn { flex: 1 1 auto; }
+.banner-actions .btn { flex: 1 1 auto; width: auto; }
 .practice-feedback { font-size: 0.9375rem; }
 .practice-feedback.is-correct { color: var(--success-color); }
 .practice-feedback.is-wrong { color: var(--danger-color); }
@@ -1096,7 +1102,7 @@ body { contain: none; }
 .more-item span { font-size: 1.25rem; }
 .more-item:hover { background: var(--bg-color); }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
     .practice-actions .btn { flex: 1 1 auto; }
     .word.is-prompt { font-size: 1.5rem; }
 }

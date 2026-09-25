@@ -120,11 +120,11 @@
 .reading-lookup-translation { font-size: 1.0625rem; margin-top: 10px; }
 .reading-lookup-add { margin-top: 16px; width: 100%; }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
     .reading-lookup { bottom: calc(64px + env(safe-area-inset-bottom)); }
 }
 
-@media (min-width: 641px) {
+@media (min-width: 769px) {
     .reading-lookup {
         left: auto;
         right: 24px;

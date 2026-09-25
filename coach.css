@@ -178,7 +178,7 @@
 .coach-mic-btn { flex-shrink: 0; }
 
 /* ---------- phones: keep the chat input above the bottom tab bar ---------- */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
     .coach-chat-panel { padding-bottom: 4px; }
     .coach-chat-input-row {
         position: sticky;
