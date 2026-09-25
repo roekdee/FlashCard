@@ -12,6 +12,7 @@
  */
 
 import * as api from './api.js?v=dev';
+import { ICON } from './icons.js?v=dev';
 
 const PASS_MARK = 4;                       // out of 5 quiz questions
 
@@ -88,7 +89,7 @@ export async function showGrammar() {
 function renderDue() {
     const due = lessons.filter((l) => isDue(l.id) && !isLocked(l.level));
     $('grammarDue').innerHTML = due.length ? `
-        <h4 class="panel-title">📅 ถึงรอบทบทวน ${due.length} บท</h4>
+        <h4 class="panel-title">${ICON.calendar} ถึงรอบทบทวน ${due.length} บท</h4>
         <div class="chips">${due.map((l) =>
             `<button class="chip" data-lesson="${esc(l.id)}">${esc(l.level)} · ${esc(l.title)}</button>`).join('')}
         </div>` : '';
@@ -102,7 +103,7 @@ function renderList() {
         const passed = all.filter((l) => isPassed(l.id)).length;
         chip.classList.toggle('is-active', lv === level);
         chip.classList.toggle('is-locked', isLocked(lv));
-        chip.textContent = `${lv}${isLocked(lv) ? ' 🔒' : ''} · ${passed}/${all.length}`;
+        chip.innerHTML = `${esc(lv)}${isLocked(lv) ? ` ${ICON.lock}` : ''} · ${passed}/${all.length}`;
     });
 
     $('grammarDetail').hidden = true;
@@ -119,7 +120,7 @@ function renderList() {
                     <span>${esc(l.title_th)}</span>
                     <code>${esc(l.pattern)}</code>
                 </span>
-                <span class="grammar-row-state">${isDue(l.id) ? '🔁' : isPassed(l.id) ? '✅' : '›'}</span>
+                <span class="grammar-row-state">${isDue(l.id) ? ICON.repeat : isPassed(l.id) ? ICON.checkCircle : '›'}</span>
             </button>`)
         .join('');
 }
@@ -144,7 +145,7 @@ function openLesson(id) {
             <ul class="grammar-examples">
                 ${lesson.examples.map((ex) => `
                     <li>
-                        <button class="speak-btn" data-say="${esc(ex.en)}" aria-label="ฟังประโยค">🔊</button>
+                        <button class="speak-btn" data-say="${esc(ex.en)}" aria-label="ฟังประโยค">${ICON.speaker}</button>
                         <span><span class="example-en">${esc(ex.en)}</span>
                         <span class="example-th">${esc(ex.th)}</span></span>
                     </li>`).join('')}
@@ -192,7 +193,7 @@ function answer(choice, btn) {
 
     const last = quiz.index === quiz.lesson.quiz.length - 1;
     $('grammarFeedback').innerHTML = `
-        ${right ? '✅ ถูกต้อง' : '❌ ยังไม่ถูก'} · ${esc(q.q.replace('___', q.options[q.answer]))}
+        ${right ? `${ICON.checkCircle} ถูกต้อง` : `${ICON.xCircle} ยังไม่ถูก`} · ${esc(q.q.replace('___', q.options[q.answer]))}
         <span class="example-th">${esc(q.th)}</span>
         <button class="btn btn-primary" id="grammarNext">${last ? 'ดูผล' : 'ข้อต่อไป →'}</button>`;
 }
@@ -216,7 +217,7 @@ async function nextQuestion() {
     $('grammarQuiz').innerHTML = `
         <h4 class="panel-title">ผลแบบฝึกหัด</h4>
         <p class="grammar-score">${score} / ${total}</p>
-        <p>${passed ? '🎉 ผ่านบทนี้แล้ว' : `ต้องได้อย่างน้อย ${PASS_MARK} ข้อถึงจะผ่าน ลองทบทวนตัวอย่างแล้วทำใหม่`}</p>
+        <p>${passed ? 'ผ่านบทนี้แล้ว' : `ต้องได้อย่างน้อย ${PASS_MARK} ข้อถึงจะผ่าน ลองทบทวนตัวอย่างแล้วทำใหม่`}</p>
         <p class="field-hint">${esc(next)}</p>
         <div class="secondary-row">
             <button class="btn btn-secondary" id="grammarRetry">ทำใหม่</button>

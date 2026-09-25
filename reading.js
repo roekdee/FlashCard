@@ -11,6 +11,7 @@
  */
 
 import * as api from './api.js?v=dev';
+import { ICON } from './icons.js?v=dev';
 
 const DONE_KEY = 'flash_reading_done';
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -132,7 +133,7 @@ function renderList() {
         const all = stories.filter((s) => s.level === lv);
         const read = all.filter((s) => s.id in done).length;
         const locked = isLocked(lv);
-        return `<button class="chip${lv === level ? ' is-active' : ''}${locked ? ' is-locked' : ''}" data-level="${lv}">${lv}${locked ? ' 🔒' : ''} · ${read}/${all.length}</button>`;
+        return `<button class="chip${lv === level ? ' is-active' : ''}${locked ? ' is-locked' : ''}" data-level="${lv}">${lv}${locked ? ` ${ICON.lock}` : ''} · ${read}/${all.length}</button>`;
     }).join('');
 
     $('readingStory').hidden = true;
@@ -145,7 +146,7 @@ function renderList() {
                 <span>${esc(s.title_th)}</span>
                 <span class="reading-row-meta">${esc(s.topic)} · ${wordCount(s)} คำ</span>
             </span>
-            <span class="reading-row-state">${s.id in done ? '✅' : '›'}</span>
+            <span class="reading-row-state">${s.id in done ? ICON.checkCircle : '›'}</span>
         </button>`).join('') : '<p class="field-hint">ยังไม่มีเรื่องในระดับนี้</p>';
 }
 
@@ -179,7 +180,7 @@ function renderParagraph(p) {
     return `
         <div class="reading-paragraph">
             <div class="reading-para-controls">
-                <button class="speak-btn" data-say="${esc(p.en)}" data-rate="0.9" aria-label="ฟังย่อหน้า">🔊</button>
+                <button class="speak-btn" data-say="${esc(p.en)}" data-rate="0.9" aria-label="ฟังย่อหน้า">${ICON.speaker}</button>
                 <button class="btn btn-secondary reading-translate" data-translate="1">แปล</button>
             </div>
             <p class="reading-para-en">${tokenize(p.en)}</p>
@@ -248,7 +249,7 @@ function openLookupLoading(raw) {
     el.hidden = false;
     el.innerHTML = `
         <div class="reading-lookup-card">
-            <button class="reading-lookup-close" id="readingLookupClose" aria-label="ปิด">✕</button>
+            <button class="reading-lookup-close" id="readingLookupClose" aria-label="ปิด">${ICON.close}</button>
             <p class="reading-lookup-word">${esc(raw)}</p>
             <p class="loading">กำลังค้นหา...</p>
         </div>`;
@@ -259,15 +260,15 @@ function renderLookup(raw, result) {
     if (el.hidden) return;                 // closed while the lookup was in flight
     el.innerHTML = !result ? `
         <div class="reading-lookup-card">
-            <button class="reading-lookup-close" id="readingLookupClose" aria-label="ปิด">✕</button>
+            <button class="reading-lookup-close" id="readingLookupClose" aria-label="ปิด">${ICON.close}</button>
             <p class="reading-lookup-word">${esc(raw)}</p>
             <p class="field-hint">ไม่พบคำนี้ในคลัง</p>
         </div>` : `
         <div class="reading-lookup-card">
-            <button class="reading-lookup-close" id="readingLookupClose" aria-label="ปิด">✕</button>
+            <button class="reading-lookup-close" id="readingLookupClose" aria-label="ปิด">${ICON.close}</button>
             <p class="reading-lookup-word">
                 ${esc(result.word)}
-                <button class="speak-btn" data-say="${esc(result.word)}" aria-label="ฟังคำ">🔊</button>
+                <button class="speak-btn" data-say="${esc(result.word)}" aria-label="ฟังคำ">${ICON.speaker}</button>
             </p>
             <p class="reading-lookup-meta">
                 ${result.pos ? `<span class="pos-tag">${esc(result.pos)}</span>` : ''}
@@ -275,7 +276,7 @@ function renderLookup(raw, result) {
             </p>
             ${result.pronunciation ? `<p class="reading-lookup-pron">${esc(result.pronunciation)}</p>` : ''}
             <p class="reading-lookup-translation">${esc(result.translation)}</p>
-            <button class="btn btn-primary reading-lookup-add" id="readingLookupAdd" data-id="${esc(result.id)}" data-word="${esc(result.word)}">➕ เพิ่มเข้าทบทวนวันนี้</button>
+            <button class="btn btn-primary reading-lookup-add" id="readingLookupAdd" data-id="${esc(result.id)}" data-word="${esc(result.word)}">${ICON.plus} เพิ่มเข้าทบทวนวันนี้</button>
         </div>`;
 }
 
@@ -335,7 +336,7 @@ function answerQuestion(choice, btn) {
 
     const last = quiz.index === story.questions.length - 1;
     $('readingFeedback').innerHTML = `
-        ${right ? '✅ ถูกต้อง' : '❌ ยังไม่ถูก'}
+        ${right ? `${ICON.checkCircle} ถูกต้อง` : `${ICON.xCircle} ยังไม่ถูก`}
         <span class="example-th">${esc(q.explain_th)}</span>
         <button class="btn btn-primary" id="readingNext">${last ? 'ดูผล' : 'ข้อต่อไป →'}</button>`;
 }

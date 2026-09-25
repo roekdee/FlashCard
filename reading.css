@@ -7,7 +7,7 @@
     flex-direction: column;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 2px;
+    border-radius: var(--radius-lg);
     overflow: hidden;
 }
 
@@ -38,7 +38,7 @@
 
 .reading-back { margin-bottom: 14px; }
 
-.reading-title { font-size: 1.5rem; font-weight: 500; margin: 8px 0 2px; }
+.reading-title { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; margin: 8px 0 2px; }
 .reading-title-th { color: var(--text-muted); margin-bottom: 16px; }
 
 .reading-paragraphs { display: flex; flex-direction: column; gap: 18px; }
@@ -48,19 +48,19 @@
 
 .reading-para-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 
-.reading-para-en { line-height: 1.9; }
+.reading-para-en { font-family: var(--font-display); line-height: 1.9; }
 .reading-para-th { line-height: 1.8; color: var(--text-muted); margin-top: 8px; }
 
 .reading-word {
     cursor: pointer;
-    border-radius: 2px;
+    border-radius: var(--radius);
     padding: 0 1px;
     transition: background 0.15s ease, color 0.15s ease;
 }
 
-.reading-word:hover { background: var(--pro-bg); color: var(--primary-color); }
+.reading-word:hover { background: var(--tint); color: var(--primary-color); }
 
-.reading-question { font-size: 1.0625rem; line-height: 1.7; margin-bottom: 4px; }
+.reading-question { font-family: var(--font-display); font-size: 1.0625rem; line-height: 1.7; margin-bottom: 4px; }
 .reading-feedback { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .reading-feedback:empty { display: none; }
 .reading-score { font-size: 2rem; font-weight: 500; }
@@ -88,7 +88,7 @@
     position: relative;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 2px 2px 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     padding: 20px;
     box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
 }
@@ -100,15 +100,16 @@
     width: 32px;
     height: 32px;
     border: 1px solid var(--border-color);
-    border-radius: 2px;
+    border-radius: 999px;
     background: var(--bg-color);
     color: var(--text-color);
     cursor: pointer;
 }
 
 .reading-lookup-word {
+    font-family: var(--font-display);
     font-size: 1.375rem;
-    font-weight: 500;
+    font-weight: 600;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -132,7 +133,7 @@
         width: 380px;
         max-width: calc(100vw - 48px);
     }
-    .reading-lookup-card { border-radius: 2px; }
+    .reading-lookup-card { border-radius: var(--radius-lg); }
     .reading-lookup-backdrop { background: transparent; }
 }
 

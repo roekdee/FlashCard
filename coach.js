@@ -7,20 +7,21 @@
  * on every successful call and is also fetched once on entry.
  */
 import * as api from './api.js?v=dev';
+import { ICON } from './icons.js?v=dev';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const SCENARIOS = [
-    { id: 'restaurant', emoji: '🍽️', title: 'ร้านอาหาร', openers: ["Hello! Table for one? Please sit here.", "Hi there! Welcome in. How many people, and do you have a table in mind?", "Good evening, and welcome. We're rather busy tonight, but I can offer you a quiet corner or a seat by the window \u2014 which would you prefer?"] },
-    { id: 'job_interview', emoji: '💼', title: 'สัมภาษณ์งาน', openers: ["Hello. Please sit down. What is your name?", "Thanks for coming in today. So, tell me a little about yourself.", "Thanks for making the time. Before we dig into your CV, I'd love to hear what drew you to this role in particular."] },
-    { id: 'hotel', emoji: '🏨', title: 'เข้าพักโรงแรม', openers: ["Hello! Welcome. Do you have a room booking?", "Good evening, welcome to the hotel! Do you have a reservation with us?", "Good evening and welcome. I can see we've got a reservation under your name \u2014 would you like me to walk you through what's included in your stay?"] },
-    { id: 'directions', emoji: '🧭', title: 'ถามทาง', openers: ["Hi! Are you lost? Where do you want to go?", "Oh, hi! You look a bit lost \u2014 is there somewhere I can help you find?", "Excuse me \u2014 you seem to be searching for something. Can I point you in the right direction, or are you just taking in the neighbourhood?"] },
-    { id: 'shopping', emoji: '🛍️', title: 'ซื้อของ', openers: ["Hello! Can I help you? What do you want to buy?", "Hello! Let me know if you need any help finding something today.", "Hi there \u2014 just browsing, or is there something specific you've got your eye on? We've had a few new arrivals this week."] },
-    { id: 'doctor', emoji: '🩺', title: 'พบแพทย์', openers: ["Hello. Please sit down. Are you sick today?", "Good morning, please have a seat. So, what brings you in today?", "Good morning, do take a seat. I've had a look at your notes, but I'd rather hear it from you \u2014 what's been bothering you lately?"] },
-    { id: 'small_talk', emoji: '💬', title: 'พูดคุยทั่วไป', openers: ["Hi! How are you today?", "Hey, long time no see! How have you been lately?", "Well, look who it is! It feels like ages since we last caught up \u2014 what have you been up to?"] },
-    { id: 'meeting', emoji: '📊', title: 'ประชุมงาน', openers: ["Hello everyone. Let's start. How is your work this week?", "Alright, thanks for joining \u2014 shall we start with your update?", "Right, let's make a start, since we've got a lot to get through. Could you bring us up to speed on where things stand with your project?"] },
+    { id: 'restaurant', icon: ICON.utensils, title: 'ร้านอาหาร', openers: ["Hello! Table for one? Please sit here.", "Hi there! Welcome in. How many people, and do you have a table in mind?", "Good evening, and welcome. We're rather busy tonight, but I can offer you a quiet corner or a seat by the window \u2014 which would you prefer?"] },
+    { id: 'job_interview', icon: ICON.briefcase, title: 'สัมภาษณ์งาน', openers: ["Hello. Please sit down. What is your name?", "Thanks for coming in today. So, tell me a little about yourself.", "Thanks for making the time. Before we dig into your CV, I'd love to hear what drew you to this role in particular."] },
+    { id: 'hotel', icon: ICON.bed, title: 'เข้าพักโรงแรม', openers: ["Hello! Welcome. Do you have a room booking?", "Good evening, welcome to the hotel! Do you have a reservation with us?", "Good evening and welcome. I can see we've got a reservation under your name \u2014 would you like me to walk you through what's included in your stay?"] },
+    { id: 'directions', icon: ICON.compass, title: 'ถามทาง', openers: ["Hi! Are you lost? Where do you want to go?", "Oh, hi! You look a bit lost \u2014 is there somewhere I can help you find?", "Excuse me \u2014 you seem to be searching for something. Can I point you in the right direction, or are you just taking in the neighbourhood?"] },
+    { id: 'shopping', icon: ICON.bag, title: 'ซื้อของ', openers: ["Hello! Can I help you? What do you want to buy?", "Hello! Let me know if you need any help finding something today.", "Hi there \u2014 just browsing, or is there something specific you've got your eye on? We've had a few new arrivals this week."] },
+    { id: 'doctor', icon: ICON.stethoscope, title: 'พบแพทย์', openers: ["Hello. Please sit down. Are you sick today?", "Good morning, please have a seat. So, what brings you in today?", "Good morning, do take a seat. I've had a look at your notes, but I'd rather hear it from you \u2014 what's been bothering you lately?"] },
+    { id: 'small_talk', icon: ICON.coffee, title: 'พูดคุยทั่วไป', openers: ["Hi! How are you today?", "Hey, long time no see! How have you been lately?", "Well, look who it is! It feels like ages since we last caught up \u2014 what have you been up to?"] },
+    { id: 'meeting', icon: ICON.presentation, title: 'ประชุมงาน', openers: ["Hello everyone. Let's start. How is your work this week?", "Alright, thanks for joining \u2014 shall we start with your update?", "Right, let's make a start, since we've got a lot to get through. Could you bring us up to speed on where things stand with your project?"] },
 ];
 
 let deps = null;
@@ -67,8 +68,8 @@ function render() {
     root().innerHTML = `
         <div class="coach-header" id="coachHeader"></div>
         <div class="coach-subtabs">
-            <button class="btn ${sub === 'write' ? 'btn-primary' : 'btn-secondary'}" data-sub="write">✍️ แต่งประโยค</button>
-            <button class="btn ${sub === 'chat' ? 'btn-primary' : 'btn-secondary'}" data-sub="chat">💬 ฝึกสนทนา</button>
+            <button class="btn ${sub === 'write' ? 'btn-primary' : 'btn-secondary'}" data-sub="write">${ICON.pen} แต่งประโยค</button>
+            <button class="btn ${sub === 'chat' ? 'btn-primary' : 'btn-secondary'}" data-sub="chat">${ICON.chat} ฝึกสนทนา</button>
         </div>
         <div id="coachBody"></div>`;
     renderHeader();
@@ -186,8 +187,8 @@ function renderResult() {
         <div class="panel coach-result">
             <div class="coach-result-head">
                 <span class="coach-score">${r.score}/10</span>
-                <span class="${r.ok ? 'coach-ok' : 'coach-bad'}">${r.ok ? '✅ ถูกต้อง' : '❌ ยังไม่ถูก'}</span>
-                ${r.uses_word ? '' : '<span class="coach-bad">⚠️ ไม่ได้ใช้คำนี้</span>'}
+                <span class="${r.ok ? 'coach-ok' : 'coach-bad'}">${r.ok ? `${ICON.checkCircle} ถูกต้อง` : `${ICON.xCircle} ยังไม่ถูก`}</span>
+                ${r.uses_word ? '' : `<span class="coach-bad">${ICON.alert} ไม่ได้ใช้คำนี้</span>`}
             </div>
             <p class="coach-field-label">ฉบับแก้ไข</p>
             <p class="coach-corrected">${esc(r.corrected)}</p>
@@ -195,7 +196,7 @@ function renderResult() {
             ${r.tips_th?.length ? `<ul class="coach-tips">${r.tips_th.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
             <p class="coach-field-label">พูดได้เป็นธรรมชาติกว่านี้</p>
             <p class="coach-better">
-                <button class="speak-btn" id="coachBetterSpeak" aria-label="ฟังประโยค">🔊</button>
+                <button class="speak-btn" id="coachBetterSpeak" aria-label="ฟังประโยค">${ICON.speaker}</button>
                 ${esc(r.better)}
             </p>
         </div>`;
@@ -215,7 +216,7 @@ function renderChat() {
                 <div class="coach-scenario-grid">
                     ${SCENARIOS.map((s) => `
                         <button class="coach-scenario-card" data-scenario="${s.id}">
-                            <span class="coach-scenario-emoji">${s.emoji}</span>
+                            <span class="coach-scenario-emoji">${s.icon}</span>
                             <span>${esc(s.title)}</span>
                         </button>`).join('')}
                 </div>
@@ -237,13 +238,13 @@ function renderChat() {
     body.innerHTML = `
         <div class="panel coach-chat-panel">
             <div class="coach-chat-head">
-                <span>${scenario.emoji} ${esc(scenario.title)} · <span class="level-tag">${esc(chatLevel)}</span></span>
+                <span>${scenario.icon} ${esc(scenario.title)} · <span class="level-tag">${esc(chatLevel)}</span></span>
                 <button class="btn btn-secondary" id="coachRestartBtn">เริ่มใหม่</button>
             </div>
             <div class="coach-chat-log" id="coachChatLog"></div>
             <p class="loading" id="coachChatTyping" hidden>กำลังพิมพ์...</p>
             <div class="coach-chat-input-row">
-                <button class="speak-btn coach-mic-btn" id="coachMicBtn" aria-label="พูดใส่ไมค์" hidden>🎤</button>
+                <button class="speak-btn coach-mic-btn" id="coachMicBtn" aria-label="พูดใส่ไมค์" hidden>${ICON.mic}</button>
                 <input class="select-input coach-chat-input" id="coachChatInput" type="text" maxlength="500" placeholder="พิมพ์คำตอบเป็นภาษาอังกฤษ...">
                 <button class="btn btn-primary" id="coachSendBtn">ส่ง</button>
             </div>
@@ -278,14 +279,14 @@ function renderChatLog() {
         if (m.role === 'coach') {
             return `
                 <div class="coach-bubble coach-bubble-coach">
-                    <button class="speak-btn" data-say="${esc(m.text)}" aria-label="ฟังประโยค">🔊</button>
+                    <button class="speak-btn" data-say="${esc(m.text)}" aria-label="ฟังประโยค">${ICON.speaker}</button>
                     <span>${esc(m.text)}</span>
                 </div>`;
         }
         const note = m.correction_th
             ? `<div class="coach-bubble-note">
                    <p>${esc(m.correction_th)}</p>
-                   ${m.suggestion ? `<p class="coach-suggestion">💡 ${esc(m.suggestion)}</p>` : ''}
+                   ${m.suggestion ? `<p class="coach-suggestion">${ICON.lightbulb} ${esc(m.suggestion)}</p>` : ''}
                </div>`
             : '';
         return `

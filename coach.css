@@ -52,6 +52,7 @@
 }
 
 .coach-corrected {
+    font-family: var(--font-display);
     font-size: 1.0625rem;
     line-height: 1.6;
 }
@@ -69,6 +70,7 @@
 }
 
 .coach-better {
+    font-family: var(--font-display);
     display: flex;
     align-items: center;
     gap: 10px;
@@ -90,16 +92,18 @@
     gap: 6px;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 2px;
+    border-radius: var(--radius);
     padding: 16px 10px;
     font-family: inherit;
     font-size: 0.8125rem;
     color: var(--text-color);
     cursor: pointer;
     transition: border-color 0.2s ease, transform 0.15s ease;
+    min-height: 44px;
 }
 .coach-scenario-card:hover { border-color: var(--primary-color); transform: translateY(-1px); }
-.coach-scenario-emoji { font-size: 1.75rem; }
+.coach-scenario-emoji { font-size: 1.75rem; color: var(--primary-color); }
+.coach-scenario-emoji .icon { width: 1.75rem; height: 1.75rem; }
 
 .coach-level-label {
     display: block;
@@ -135,10 +139,11 @@
     align-self: flex-start;
     align-items: flex-start;
     gap: 8px;
-    background: var(--bg-color);
+    background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 2px;
+    border-radius: 18px 18px 18px 6px;
     padding: 10px 12px;
+    font-family: var(--font-display);
     line-height: 1.6;
 }
 
@@ -150,17 +155,19 @@
 }
 
 .coach-bubble-learner {
-    background: var(--primary-color);
-    color: var(--card-bg);
-    border-radius: 2px;
+    background: var(--text-color);
+    color: var(--bg-color);
+    border-radius: 18px 18px 6px 18px;
     padding: 10px 12px;
+    font-family: var(--font-display);
     line-height: 1.6;
 }
 
 .coach-bubble-note {
-    background: var(--warning-color);
-    color: var(--card-bg);
-    border-radius: 2px;
+    background: var(--warning-soft);
+    color: var(--warning-color);
+    border: 1px solid var(--warning-color);
+    border-radius: var(--radius);
     padding: 8px 10px;
     font-size: 0.8125rem;
     line-height: 1.6;
